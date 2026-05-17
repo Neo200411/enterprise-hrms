@@ -2,6 +2,7 @@
 
 import { Bell, ChevronDown } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../providers/auth-provider'
 
 interface HeaderProps {
   userName: string
@@ -10,6 +11,7 @@ interface HeaderProps {
 
 export default function Header({ userName, userRole }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const { signOut } = useAuth()
 
   const getRoleLabel = () => {
     const roles: Record<string, string> = {
@@ -62,7 +64,10 @@ export default function Header({ userName, userRole }: HeaderProps) {
                   Settings
                 </button>
                 <hr className="my-1 border-border" />
-                <button className="w-full text-left px-3 py-2 text-sm rounded hover:bg-destructive/10 text-destructive transition-colors">
+                <button 
+                  onClick={() => signOut()}
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-destructive/10 text-destructive transition-colors"
+                >
                   Logout
                 </button>
               </div>

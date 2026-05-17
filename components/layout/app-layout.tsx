@@ -3,6 +3,7 @@
 import Sidebar from './sidebar'
 import Header from './header'
 import { useState } from 'react'
+import { useAuth } from '../providers/auth-provider'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -12,18 +13,25 @@ interface AppLayoutProps {
 
 export default function AppLayout({
   children,
-  userRole = 'employee',
-  userName = 'Jane Smith',
 }: AppLayoutProps) {
+  const { user, role, isLoading } = useAuth()
+
+  if (isLoading) {
+    return <div className="flex h-screen bg-background items-center justify-center">Loading...</div>
+  }
+
+  const effectiveRole = role || 'employee'
+  const effectiveName = user?.email?.split('@')[0] || 'User'
+
   return (
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
-      <Sidebar userRole={userRole} />
+      <Sidebar userRole={effectiveRole} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <Header userName={userName} userRole={userRole} />
+        <Header userName={effectiveName} userRole={effectiveRole} />
 
         {/* Page content */}
         <main className="flex-1 overflow-auto bg-background">

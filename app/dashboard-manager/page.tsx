@@ -3,10 +3,46 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { BarChart3, Users, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
 
 export default function ManagerDashboard() {
+  const [metrics, setMetrics] = useState({
+    teamMembers: 0,
+    activeGoals: 0,
+    approvalsPending: 0,
+    teamScore: 87 // Mock team score for now
+  })
+  
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      // Get all goals
+      const { data: goals, error } = await supabase
+        .from('goals')
+        .select('employee_id, status')
+      
+      if (!error && goals) {
+        // Active goals are anything not draft
+        const activeGoals = goals.filter(g => g.status !== 'draft').length
+        // Pending approvals
+        const pending = goals.filter(g => g.status === 'pending_approval').length
+        // Unique team members from goals
+        const members = new Set(goals.map(g => g.employee_id)).size
+        
+        setMetrics({
+          teamMembers: members,
+          activeGoals: activeGoals,
+          approvalsPending: pending,
+          teamScore: 87
+        })
+      }
+    }
+    
+    fetchMetrics()
+  }, [])
+
   return (
-    <AppLayout userRole="manager">
+    <AppLayout>
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Manager Dashboard</h1>
@@ -18,8 +54,8 @@ export default function ManagerDashboard() {
         <DashboardCard title="Team Members">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-4xl font-bold text-primary">12</p>
-              <p className="text-sm text-muted-foreground mt-2">Direct reports</p>
+              <p className="text-4xl font-bold text-primary">{metrics.teamMembers}</p>
+              <p className="text-sm text-muted-foreground mt-2">Active goal setters</p>
             </div>
             <div className="text-primary/30">
               <Users className="w-12 h-12" />
@@ -30,8 +66,8 @@ export default function ManagerDashboard() {
         <DashboardCard title="Team Goals">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-4xl font-bold text-accent">48</p>
-              <p className="text-sm text-muted-foreground mt-2">Active goals</p>
+              <p className="text-4xl font-bold text-accent">{metrics.activeGoals}</p>
+              <p className="text-sm text-muted-foreground mt-2">Submitted goals</p>
             </div>
             <div className="text-accent/30">
               <BarChart3 className="w-12 h-12" />
@@ -42,8 +78,8 @@ export default function ManagerDashboard() {
         <DashboardCard title="Approvals Pending">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-4xl font-bold text-status-pending">3</p>
-              <p className="text-sm text-muted-foreground mt-2">Awaiting review</p>
+              <p className="text-4xl font-bold text-status-pending">{metrics.approvalsPending}</p>
+              <p className="text-sm text-muted-foreground mt-2">Goals awaiting review</p>
             </div>
             <div className="text-status-pending/30">
               <AlertCircle className="w-12 h-12" />
@@ -54,7 +90,7 @@ export default function ManagerDashboard() {
         <DashboardCard title="Team Score">
           <div className="flex items-end justify-between">
             <div>
-              <p className="text-4xl font-bold text-status-success">87%</p>
+              <p className="text-4xl font-bold text-status-success">{metrics.teamScore}%</p>
               <p className="text-sm text-muted-foreground mt-2">Overall performance</p>
             </div>
             <div className="text-status-success/30">

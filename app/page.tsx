@@ -5,10 +5,8 @@ import DashboardCard from '@/components/dashboard/dashboard-card'
 import { ArrowRight, CheckCircle2, Clock, AlertCircle, Zap } from 'lucide-react'
 
 export default function Home() {
-  const userRole = 'employee'
-
   return (
-    <AppLayout userRole={userRole}>
+    <AppLayout>
       {/* Welcome Section */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Welcome back, Jane</h1>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Mail, Lock } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -17,17 +18,27 @@ export default function LoginPage() {
     setError('')
     setIsLoading(true)
 
-    // Simulate API call
-    setTimeout(() => {
-      if (email && password) {
-        // Mock authentication - in real app, call your auth API
-        localStorage.setItem('userRole', 'employee')
-        router.push('/')
-      } else {
-        setError('Please fill in all fields')
-      }
+    if (!email || !password) {
+      setError('Please fill in all fields')
       setIsLoading(false)
-    }, 500)
+      return
+    }
+
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        setError(error.message)
+      }
+      // Note: Successful redirect is handled globally by the AuthProvider
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -125,11 +136,11 @@ export default function LoginPage() {
 
           {/* Demo Credentials */}
           <div className="space-y-2 p-4 rounded-lg bg-secondary/50 border border-border">
-            <p className="text-xs font-medium text-foreground">Demo Credentials</p>
+            <p className="text-xs font-medium text-foreground">Demo Credentials (Password: Test@123)</p>
             <div className="space-y-1 text-xs text-muted-foreground">
-              <p>Employee: demo@example.com / password</p>
-              <p>Manager: manager@example.com / password</p>
-              <p>Admin: admin@example.com / password</p>
+              <p>Employee: employee@test.com</p>
+              <p>Manager: manager@test.com</p>
+              <p>Admin: admin@test.com</p>
             </div>
           </div>
 

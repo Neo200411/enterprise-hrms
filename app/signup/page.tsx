@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Mail, Lock, User, Building2, Check } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 
 export default function SignupPage() {
   const router = useRouter()
@@ -49,12 +50,21 @@ export default function SignupPage() {
 
     setIsLoading(true)
 
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+      })
+
+      if (authError) throw authError
+
       localStorage.setItem('userRole', 'employee')
       router.push('/')
+    } catch (err: any) {
+      setError(err.message || 'An error occurred during signup')
+    } finally {
       setIsLoading(false)
-    }, 500)
+    }
   }
 
   return (

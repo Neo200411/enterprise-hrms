@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, BarChart3, Users, Target, CheckCircle2, Clock, Settings, LogOut } from 'lucide-react'
+import { Menu, X, BarChart3, Users, Target, CheckCircle2, Clock, Settings, LogOut, CalendarCheck } from 'lucide-react'
 import { useState } from 'react'
 
 interface NavItem {
@@ -32,6 +32,11 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
         href: '/goals',
         icon: <Target className="w-5 h-5" />,
       },
+      {
+        label: 'Quarterly Check-in',
+        href: '/checkins',
+        icon: <CalendarCheck className="w-5 h-5" />,
+      },
     ]
 
     const managerItems = [
@@ -44,7 +49,11 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
         label: 'Approvals',
         href: '/approvals',
         icon: <CheckCircle2 className="w-5 h-5" />,
-        badge: 3,
+      },
+      {
+        label: 'Check-in Reviews',
+        href: '/checkins-review',
+        icon: <CalendarCheck className="w-5 h-5" />,
       },
     ]
 

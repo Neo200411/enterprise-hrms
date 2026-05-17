@@ -2,103 +2,209 @@
 
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
-import { useState } from 'react'
-import { CheckCircle2, XCircle, MessageCircle, Clock } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { CheckCircle2, XCircle, MessageCircle, Clock, Save, Edit2 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/components/providers/auth-provider'
 
-interface ApprovalItem {
+interface Goal {
   id: number
-  employeeName: string
-  employeeId: string
-  type: 'goal_update' | 'review_submission' | 'time_off'
-  title: string
+  employee_id: string
+  goal_title: string
   description: string
+  thrust_area: string
+  uom_type: string
+  measurement_type: string
+  target_value: number
+  weightage: number
+  status: string
+  created_at: string
+}
+
+interface UserProfile {
+  id: string
+  name: string
+  email: string
+}
+
+interface EmployeeSubmission {
+  employeeId: string
+  employeeName: string
+  email: string
+  status: 'pending_approval' | 'approved' | 'rejected' | string
   submittedDate: string
-  status: 'pending' | 'approved' | 'rejected'
-  priority: 'high' | 'medium' | 'low'
+  goals: Goal[]
 }
 
 export default function ApprovalsPage() {
-  const [approvals, setApprovals] = useState<ApprovalItem[]>([
-    {
-      id: 1,
-      employeeName: 'Alice Johnson',
-      employeeId: 'EMP001',
-      type: 'goal_update',
-      title: 'Q4 Goal Progress Update',
-      description: 'Updated progress on Product Documentation goal from 50% to 75%',
-      submittedDate: '2024-12-01',
-      status: 'pending',
-      priority: 'high',
-    },
-    {
-      id: 2,
-      employeeName: 'Bob Smith',
-      employeeId: 'EMP002',
-      type: 'review_submission',
-      title: 'Q4 Performance Review Submitted',
-      description: 'Self-assessment and feedback for quarterly performance review',
-      submittedDate: '2024-11-28',
-      status: 'pending',
-      priority: 'high',
-    },
-    {
-      id: 3,
-      employeeName: 'Carol White',
-      employeeId: 'EMP003',
-      type: 'time_off',
-      title: 'Time Off Request - 2 weeks',
-      description: 'Requesting time off from Dec 20 - Jan 2',
-      submittedDate: '2024-11-25',
-      status: 'pending',
-      priority: 'medium',
-    },
-  ])
-
-  const [selectedApproval, setSelectedApproval] = useState<ApprovalItem | null>(null)
+  const { user } = useAuth()
+  const [submissions, setSubmissions] = useState<EmployeeSubmission[]>([])
+  const [selectedSubmission, setSelectedSubmission] = useState<EmployeeSubmission | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleApprove = (id: number) => {
-    setApprovals((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: 'approved' } : a))
-    )
-    setSelectedApproval(null)
-  }
+  // Edit state for inline editing
+  const [editedGoals, setEditedGoals] = useState<Record<number, Partial<Goal>>>({})
 
-  const handleReject = (id: number) => {
-    setApprovals((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, status: 'rejected' } : a))
-    )
-    setSelectedApproval(null)
-  }
+  const fetchApprovals = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      // Fetch all goals that aren't drafts
+      const { data: goals, error: goalsError } = await supabase
+        .from('goals')
+        .select('*')
+        .neq('status', 'draft')
+        .order('created_at', { ascending: false })
 
-  const getPriorityColor = (priority: string) => {
-    const colors: Record<string, string> = {
-      high: 'bg-destructive/10 text-destructive border-destructive/20',
-      medium: 'bg-status-pending/10 text-status-pending border-status-pending/20',
-      low: 'bg-status-success/10 text-status-success border-status-success/20',
+      if (goalsError) throw goalsError
+
+      if (!goals || goals.length === 0) {
+        setSubmissions([])
+        setIsLoading(false)
+        return
+      }
+
+      // Extract unique employee IDs
+      const employeeIds = [...new Set(goals.map((g: any) => g.employee_id))]
+
+      // Fetch users — may return empty array if RLS restricts cross-user reads
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, name, email')
+        .in('id', employeeIds)
+
+      const userMap = new Map<string, UserProfile>()
+      users?.forEach((u: any) => userMap.set(u.id, u))
+
+      // Group goals by employee
+      const grouped = new Map<string, EmployeeSubmission>()
+
+      goals.forEach((goal: any) => {
+        if (!grouped.has(goal.employee_id)) {
+          const emp = userMap.get(goal.employee_id)
+          const shortId = goal.employee_id.split('-')[0]
+          grouped.set(goal.employee_id, {
+            employeeId: goal.employee_id,
+            employeeName: emp?.name || emp?.email?.split('@')[0] || `Employee (${shortId})`,
+            email: emp?.email || goal.employee_id,
+            status: goal.status, // take status of the first goal
+            submittedDate: new Date(goal.created_at).toLocaleDateString(),
+            goals: []
+          })
+        }
+        grouped.get(goal.employee_id)!.goals.push(goal)
+      })
+
+      setSubmissions(Array.from(grouped.values()))
+    } catch (err: any) {
+      console.error('Error fetching approvals:', err)
+      setError(err.message || 'Failed to load approvals')
+    } finally {
+      setIsLoading(false)
     }
-    return colors[priority] || ''
   }
 
-  const getTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      goal_update: 'Goal Update',
-      review_submission: 'Review',
-      time_off: 'Time Off',
+  useEffect(() => {
+    fetchApprovals()
+  }, [])
+
+  // Auto-select updated submission when list updates to refresh the UI
+  useEffect(() => {
+    if (selectedSubmission) {
+      const updated = submissions.find(s => s.employeeId === selectedSubmission.employeeId)
+      if (updated) setSelectedSubmission(updated)
     }
-    return labels[type] || type
-  }
+  }, [submissions])
 
-  const getTypeIcon = (type: string) => {
-    const icons: Record<string, React.ReactNode> = {
-      goal_update: '🎯',
-      review_submission: '📋',
-      time_off: '🏖️',
+  const handleAction = async (action: 'approved' | 'rejected') => {
+    if (!selectedSubmission || !user) return
+    setIsSaving(true)
+    setError(null)
+
+    try {
+      // 1. Update goals with new status and any inline edits
+      const goalsToUpdate = selectedSubmission.goals.map(g => {
+        const edits = editedGoals[g.id] || {}
+        return {
+          id: g.id,
+          status: action,
+          target_value: edits.target_value !== undefined ? edits.target_value : g.target_value,
+          weightage: edits.weightage !== undefined ? edits.weightage : g.weightage,
+        }
+      })
+
+      for (const update of goalsToUpdate) {
+        const { error: updateErr } = await supabase
+          .from('goals')
+          .update({
+            status: update.status,
+            target_value: update.target_value,
+            weightage: update.weightage
+          })
+          .eq('id', update.id)
+          
+        if (updateErr) throw updateErr
+
+        // 2. Insert tracking record in approvals table
+        const { error: approvalErr } = await supabase
+          .from('approvals')
+          .insert({
+            manager_id: user.id,
+            goal_id: update.id,
+            approval_action: action,
+            remarks: feedbackText || null
+          })
+
+        if (approvalErr) throw approvalErr
+      }
+
+      // Update local state to reflect UI changes instantly
+      setSubmissions(prev => 
+        prev.map(s => {
+          if (s.employeeId === selectedSubmission.employeeId) {
+            return {
+              ...s,
+              status: action,
+              goals: s.goals.map(g => ({
+                ...g,
+                status: action,
+                target_value: editedGoals[g.id]?.target_value ?? g.target_value,
+                weightage: editedGoals[g.id]?.weightage ?? g.weightage
+              }))
+            }
+          }
+          return s
+        })
+      )
+      
+      setFeedbackText('')
+      setEditedGoals({})
+      
+    } catch (err: any) {
+      console.error(`Error performing ${action}:`, err)
+      setError(err.message || `Failed to ${action} goals`)
+    } finally {
+      setIsSaving(false)
     }
-    return icons[type] || '📌'
   }
 
-  const pendingCount = approvals.filter((a) => a.status === 'pending').length
+  const handleInlineEdit = (goalId: number, field: 'target_value' | 'weightage', value: string) => {
+    const numValue = value === '' ? 0 : Number(value)
+    if (isNaN(numValue)) return
+
+    setEditedGoals(prev => ({
+      ...prev,
+      [goalId]: {
+        ...prev[goalId],
+        [field]: numValue
+      }
+    }))
+  }
+
+  const pendingCount = submissions.filter((s) => s.status === 'pending_approval').length
 
   return (
     <AppLayout userRole="manager">
@@ -107,13 +213,20 @@ export default function ApprovalsPage() {
         <p className="text-muted-foreground">Manage team submissions and approvals</p>
       </div>
 
+      {error && (
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive text-destructive rounded-lg">
+          <p className="font-medium">Error</p>
+          <p className="text-sm">{error}</p>
+        </div>
+      )}
+
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <DashboardCard title="Pending">
+        <DashboardCard title="Pending Review">
           <div className="flex items-end justify-between">
             <div>
               <p className="text-4xl font-bold text-status-pending">{pendingCount}</p>
-              <p className="text-sm text-muted-foreground mt-2">Awaiting your review</p>
+              <p className="text-sm text-muted-foreground mt-2">Awaiting your approval</p>
             </div>
             <div className="text-status-pending/30">
               <Clock className="w-12 h-12" />
@@ -125,9 +238,9 @@ export default function ApprovalsPage() {
           <div className="flex items-end justify-between">
             <div>
               <p className="text-4xl font-bold text-status-success">
-                {approvals.filter((a) => a.status === 'approved').length}
+                {submissions.filter((s) => s.status === 'approved').length}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">This month</p>
+              <p className="text-sm text-muted-foreground mt-2">Team goals locked</p>
             </div>
             <div className="text-status-success/30">
               <CheckCircle2 className="w-12 h-12" />
@@ -135,13 +248,13 @@ export default function ApprovalsPage() {
           </div>
         </DashboardCard>
 
-        <DashboardCard title="Rejected">
+        <DashboardCard title="Returned for Rework">
           <div className="flex items-end justify-between">
             <div>
               <p className="text-4xl font-bold text-destructive">
-                {approvals.filter((a) => a.status === 'rejected').length}
+                {submissions.filter((s) => s.status === 'rejected').length}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">This month</p>
+              <p className="text-sm text-muted-foreground mt-2">Needs revisions</p>
             </div>
             <div className="text-destructive/30">
               <XCircle className="w-12 h-12" />
@@ -151,97 +264,137 @@ export default function ApprovalsPage() {
       </div>
 
       {/* Approvals List */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Main List */}
-        <div className="lg:col-span-2">
-          <DashboardCard title="Items to Review">
-            <div className="space-y-3">
-              {approvals.map((approval) => (
-                <button
-                  key={approval.id}
-                  onClick={() => setSelectedApproval(approval)}
-                  className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
-                    selectedApproval?.id === approval.id
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-2xl">{getTypeIcon(approval.type)}</span>
-                        <div>
-                          <p className="font-medium text-foreground">{approval.title}</p>
-                          <p className="text-sm text-muted-foreground">{approval.employeeName}</p>
+        <div className="xl:col-span-1">
+          <DashboardCard title="Employee Submissions">
+            {isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading submissions...</p>
+            ) : submissions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No goal submissions found.</p>
+            ) : (
+              <div className="space-y-3">
+                {submissions.map((sub) => (
+                  <button
+                    key={sub.employeeId}
+                    onClick={() => {
+                      setSelectedSubmission(sub)
+                      setEditedGoals({})
+                      setFeedbackText('')
+                    }}
+                    className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
+                      selectedSubmission?.employeeId === sub.employeeId
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-2xl">🎯</span>
+                          <div>
+                            <p className="font-medium text-foreground">{sub.employeeName}</p>
+                            <p className="text-xs text-muted-foreground">{sub.goals.length} Goals Submitted</p>
+                          </div>
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground line-clamp-1">
-                        {approval.description}
-                      </p>
+                      <div className="text-right flex-shrink-0">
+                        {sub.status === 'pending_approval' && (
+                          <div className="mt-2 px-2 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
+                        )}
+                        {sub.status === 'approved' && (
+                          <div className="mt-2 px-2 py-1 bg-status-success/20 text-status-success text-xs font-semibold rounded-full border border-status-success/20">Approved</div>
+                        )}
+                        {sub.status === 'rejected' && (
+                          <div className="mt-2 px-2 py-1 bg-destructive/20 text-destructive text-xs font-semibold rounded-full border border-destructive/20">Rework</div>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right flex-shrink-0">
-                      <span
-                        className={`inline-block px-2 py-1 text-xs font-medium rounded-full border ${getPriorityColor(
-                          approval.priority
-                        )}`}
-                      >
-                        {approval.priority.charAt(0).toUpperCase() + approval.priority.slice(1)}
-                      </span>
-                      {approval.status === 'pending' && (
-                        <div className="mt-2 w-2 h-2 bg-status-pending rounded-full"></div>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </DashboardCard>
         </div>
 
         {/* Detail Panel */}
-        <div>
-          {selectedApproval ? (
-            <DashboardCard title="Review Details">
-              <div className="space-y-4">
-                {/* Employee Info */}
-                <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-                  <p className="text-xs text-muted-foreground uppercase">Employee</p>
-                  <p className="font-medium text-foreground">{selectedApproval.employeeName}</p>
-                  <p className="text-xs text-muted-foreground">{selectedApproval.employeeId}</p>
-                </div>
+        <div className="xl:col-span-2">
+          {selectedSubmission ? (
+            <DashboardCard title={`Review Goals: ${selectedSubmission.employeeName}`}>
+              <div className="space-y-6">
+                
+                {/* Goals List */}
+                <div className="space-y-4">
+                  {selectedSubmission.goals.map((goal, idx) => {
+                    const isPending = selectedSubmission.status === 'pending_approval'
+                    const editedTarget = editedGoals[goal.id]?.target_value ?? goal.target_value
+                    const editedWeightage = editedGoals[goal.id]?.weightage ?? goal.weightage
 
-                {/* Type & Date */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-                    <p className="text-xs text-muted-foreground uppercase">Type</p>
-                    <p className="font-medium text-foreground text-sm">
-                      {getTypeLabel(selectedApproval.type)}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-                    <p className="text-xs text-muted-foreground uppercase">Submitted</p>
-                    <p className="font-medium text-foreground text-sm">
-                      {selectedApproval.submittedDate}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div className="p-3 rounded-lg bg-secondary/50 border border-border">
-                  <p className="text-xs text-muted-foreground uppercase mb-2">Details</p>
-                  <p className="text-sm text-foreground">{selectedApproval.description}</p>
+                    return (
+                      <div key={goal.id} className="p-4 rounded-lg bg-secondary/30 border border-border">
+                        <div className="flex justify-between items-start mb-2">
+                          <h3 className="font-semibold text-lg text-foreground">
+                            {idx + 1}. {goal.goal_title}
+                          </h3>
+                          <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-md font-medium">
+                            {goal.thrust_area}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">{goal.description}</p>
+                        
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase">Type</p>
+                            <p className="text-sm font-medium">{goal.uom_type}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase">Measurement</p>
+                            <p className="text-sm font-medium capitalize">{goal.measurement_type.replace('_', ' ')}</p>
+                          </div>
+                          
+                          {/* Editable Fields */}
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase mb-1">Target</p>
+                            {isPending ? (
+                              <input 
+                                type="number" 
+                                value={editedTarget}
+                                onChange={(e) => handleInlineEdit(goal.id, 'target_value', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium">{goal.target_value}</p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground uppercase mb-1">Weightage (%)</p>
+                            {isPending ? (
+                              <input 
+                                type="number" 
+                                value={editedWeightage}
+                                onChange={(e) => handleInlineEdit(goal.id, 'weightage', e.target.value)}
+                                className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
+                              />
+                            ) : (
+                              <p className="text-sm font-medium">{goal.weightage}%</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {/* Feedback */}
-                {selectedApproval.status === 'pending' && (
+                {selectedSubmission.status === 'pending_approval' && (
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Add Feedback (Optional)
+                      Add Manager Feedback (Optional)
                     </label>
                     <textarea
                       value={feedbackText}
                       onChange={(e) => setFeedbackText(e.target.value)}
-                      placeholder="Provide feedback or conditions for approval..."
+                      placeholder="Provide feedback, praise, or reasoning for rework..."
                       rows={3}
                       className="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
                     />
@@ -249,44 +402,61 @@ export default function ApprovalsPage() {
                 )}
 
                 {/* Status Badge */}
-                {selectedApproval.status !== 'pending' && (
+                {selectedSubmission.status !== 'pending_approval' && (
                   <div
-                    className={`p-3 rounded-lg ${
-                      selectedApproval.status === 'approved'
-                        ? 'bg-status-success/10 border border-status-success/20'
-                        : 'bg-destructive/10 border border-destructive/20'
+                    className={`p-4 rounded-lg flex items-center gap-3 ${
+                      selectedSubmission.status === 'approved'
+                        ? 'bg-status-success/10 border border-status-success/20 text-status-success'
+                        : 'bg-destructive/10 border border-destructive/20 text-destructive'
                     }`}
                   >
-                    <p className="text-sm font-medium">
-                      {selectedApproval.status === 'approved' ? '✓ Approved' : '✗ Rejected'}
+                    {selectedSubmission.status === 'approved' ? (
+                      <CheckCircle2 className="w-5 h-5" />
+                    ) : (
+                      <XCircle className="w-5 h-5" />
+                    )}
+                    <p className="text-sm font-semibold">
+                      This submission has been {selectedSubmission.status}.
                     </p>
                   </div>
                 )}
 
                 {/* Action Buttons */}
-                {selectedApproval.status === 'pending' && (
-                  <div className="flex gap-2 pt-2">
+                {selectedSubmission.status === 'pending_approval' && (
+                  <div className="flex gap-4 pt-4 border-t border-border">
                     <button
-                      onClick={() => handleApprove(selectedApproval.id)}
-                      className="flex-1 px-3 py-2 bg-status-success text-white font-medium rounded-lg hover:bg-status-success/90 transition-colors duration-200 text-sm"
+                      onClick={() => handleAction('approved')}
+                      disabled={isSaving}
+                      className="flex-1 px-4 py-2 bg-status-success text-white font-semibold rounded-lg hover:bg-status-success/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      Approve
+                      {isSaving ? 'Processing...' : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> Approve Goals
+                        </>
+                      )}
                     </button>
                     <button
-                      onClick={() => handleReject(selectedApproval.id)}
-                      className="flex-1 px-3 py-2 bg-destructive text-white font-medium rounded-lg hover:bg-destructive/90 transition-colors duration-200 text-sm"
+                      onClick={() => handleAction('rejected')}
+                      disabled={isSaving}
+                      className="flex-1 px-4 py-2 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     >
-                      Reject
+                      {isSaving ? 'Processing...' : (
+                        <>
+                          <MessageCircle className="w-4 h-4" /> Return for Rework
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
               </div>
             </DashboardCard>
           ) : (
-            <DashboardCard title="No Selection">
-              <p className="text-sm text-muted-foreground text-center py-4">
-                Select an item to review details and take action
-              </p>
+            <DashboardCard title="No Submission Selected">
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <CheckCircle2 className="w-16 h-16 mb-4 opacity-20" />
+                <p className="text-lg font-medium">Select an employee to review</p>
+                <p className="text-sm mt-1">Their goal details and approval actions will appear here.</p>
+              </div>
             </DashboardCard>
           )}
         </div>
