@@ -5,7 +5,8 @@ import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/providers/auth-provider'
-import { Save, CheckCircle, Clock, Target, AlertCircle, Download } from 'lucide-react'
+import { useToast } from '@/components/providers/toast-provider'
+import { Save, CheckCircle, Clock, Target, AlertCircle, Download, AlertTriangle } from 'lucide-react'
 import { toCsv, downloadCsv } from '@/lib/export'
 
 interface Goal {
@@ -31,6 +32,7 @@ const STATUS_OPTIONS = ['Not Started', 'On Track', 'Completed']
 
 export default function CheckinsPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [goals, setGoals] = useState<Goal[]>([])
   const [checkins, setCheckins] = useState<Record<string, Checkin>>({})
   const [selectedQuarter, setSelectedQuarter] = useState('Q1')
@@ -119,9 +121,11 @@ export default function CheckinsPage() {
         setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], id: insertData.id } }))
       }
       setSavedGoalIds(prev => new Set(prev).add(goalId))
+      toast(`Successfully saved check-in for ${selectedQuarter}!`, 'success')
       setTimeout(() => setSavedGoalIds(prev => { const s = new Set(prev); s.delete(goalId); return s }), 3000)
     } catch (err: any) {
       setError(`Failed to save: ${err.message}`)
+      toast(`Failed to save progress: ${err.message}`, 'error')
     } finally {
       setSavingGoalId(null)
     }
@@ -194,6 +198,23 @@ export default function CheckinsPage() {
             <button className="ml-auto text-xs underline" onClick={() => setError(null)}>Dismiss</button>
           </div>
         )}
+
+        {!isLoading && goals.length > 0 && (() => {
+          const pendingCount = goals.filter(g => {
+            const c = checkins[g.id]
+            return !c || c.progress_status === 'Not Started' || c.actual_achievement === null
+          }).length
+          if (pendingCount === 0) return null
+          return (
+            <div className="flex items-center gap-3 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 animate-in fade-in duration-300">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 animate-pulse" />
+              <div>
+                <h4 className="font-semibold text-sm">Action Required: {pendingCount} Check-in{pendingCount > 1 ? 's' : ''} Pending</h4>
+                <p className="text-xs opacity-90 mt-0.5">Please update your actual achievement and progress status for {selectedQuarter} to remain compliant with HR tracking.</p>
+              </div>
+            </div>
+          )
+        })()}
 
         {isLoading ? (
           <div className="space-y-4">{[1,2,3].map(i => <div key={i} className="h-40 rounded-xl bg-secondary animate-pulse" />)}</div>

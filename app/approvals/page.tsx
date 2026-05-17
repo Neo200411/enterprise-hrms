@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { CheckCircle2, XCircle, MessageCircle, Clock, Save, Edit2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/components/providers/auth-provider'
+import { useToast } from '@/components/providers/toast-provider'
 
 interface Goal {
   id: number
@@ -38,6 +39,7 @@ interface EmployeeSubmission {
 
 export default function ApprovalsPage() {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [submissions, setSubmissions] = useState<EmployeeSubmission[]>([])
   const [selectedSubmission, setSelectedSubmission] = useState<EmployeeSubmission | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
@@ -47,6 +49,12 @@ export default function ApprovalsPage() {
 
   // Edit state for inline editing
   const [editedGoals, setEditedGoals] = useState<Record<number, Partial<Goal>>>({})
+
+  const getSubmissionAge = (goals: Goal[]) => {
+    if (goals.length === 0) return 0
+    const oldest = Math.min(...goals.map(g => new Date(g.created_at).getTime()))
+    return Math.max(0, Math.round((Date.now() - oldest) / (1000 * 60 * 60 * 24)))
+  }
 
   const fetchApprovals = async () => {
     setIsLoading(true)
@@ -182,6 +190,7 @@ export default function ApprovalsPage() {
       
       setFeedbackText('')
       setEditedGoals({})
+      toast(`Successfully ${action === 'approved' ? 'approved' : 'returned for rework'} submission!`, 'success')
       
     } catch (err: any) {
       console.error(`Error performing ${action}:`, err)
@@ -299,14 +308,25 @@ export default function ApprovalsPage() {
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        {sub.status === 'pending_approval' && (
-                          <div className="mt-2 px-2 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
-                        )}
+                        {sub.status === 'pending_approval' && (() => {
+                          const age = getSubmissionAge(sub.goals)
+                          if (age > 7) {
+                            return (
+                              <div className="space-y-1">
+                                <div className="px-2.5 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
+                                <div className="px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] font-bold rounded-full border border-red-500/20 animate-pulse text-center">
+                                  ⚠️ {age}d Delay
+                                </div>
+                              </div>
+                            )
+                          }
+                          return <div className="px-2.5 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
+                        })()}
                         {sub.status === 'approved' && (
-                          <div className="mt-2 px-2 py-1 bg-status-success/20 text-status-success text-xs font-semibold rounded-full border border-status-success/20">Approved</div>
+                          <div className="px-2.5 py-1 bg-status-success/20 text-status-success text-xs font-semibold rounded-full border border-status-success/20">Approved</div>
                         )}
                         {sub.status === 'rejected' && (
-                          <div className="mt-2 px-2 py-1 bg-destructive/20 text-destructive text-xs font-semibold rounded-full border border-destructive/20">Rework</div>
+                          <div className="px-2.5 py-1 bg-destructive/20 text-destructive text-xs font-semibold rounded-full border border-destructive/20">Rework</div>
                         )}
                       </div>
                     </div>

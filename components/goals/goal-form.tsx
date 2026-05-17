@@ -6,6 +6,7 @@ import { Plus, Trash2, Save, Send, AlertCircle } from 'lucide-react'
 import { goalSubmissionSchema, GoalSubmission } from '@/lib/validations/goal-schema'
 import DashboardCard from '../dashboard/dashboard-card'
 import { useAuth } from '../providers/auth-provider'
+import { useToast } from '../providers/toast-provider'
 import { supabase } from '@/lib/supabase'
 import { useState } from 'react'
 
@@ -27,6 +28,7 @@ const defaultGoal = {
 
 export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormProps) {
   const { user } = useAuth()
+  const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [globalError, setGlobalError] = useState<string | null>(null)
 
@@ -66,7 +68,9 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
     
     // Manual validation for weightage on final submit
     if (action === 'pending_approval' && totalWeightage !== 100) {
-      setGlobalError(`Total weightage must be exactly 100%. Current is ${totalWeightage}%`)
+      const msg = `Total weightage must be exactly 100%. Current is ${totalWeightage}%`
+      setGlobalError(msg)
+      toast(msg, 'warning')
       setIsSubmitting(false)
       return
     }
@@ -102,10 +106,19 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
 
       if (goalsError) throw goalsError
 
+      toast(
+        action === 'draft'
+          ? 'Draft goals saved successfully!'
+          : 'Goals submitted for approval successfully!',
+        'success'
+      )
+
       if (onSuccess) onSuccess()
     } catch (err: any) {
       console.error(err)
-      setGlobalError(err.message || 'An error occurred while saving your goals.')
+      const errMsg = err.message || 'An error occurred while saving your goals.'
+      setGlobalError(errMsg)
+      toast(errMsg, 'error')
     } finally {
       setIsSubmitting(false)
     }
