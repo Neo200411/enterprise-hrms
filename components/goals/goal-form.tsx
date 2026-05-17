@@ -8,7 +8,7 @@ import DashboardCard from '../dashboard/dashboard-card'
 import { useAuth } from '../providers/auth-provider'
 import { useToast } from '../providers/toast-provider'
 import { supabase } from '@/lib/supabase'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface GoalFormProps {
   initialData?: GoalSubmission | null
@@ -37,7 +37,10 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
     control,
     handleSubmit,
     setValue,
-    formState: { errors, isValid },
+    getValues,
+    reset,
+    trigger,
+    formState: { errors },
   } = useForm<GoalSubmission>({
     resolver: zodResolver(goalSubmissionSchema),
     defaultValues: initialData || {
@@ -47,6 +50,13 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
     },
     mode: 'onChange',
   })
+
+  // Synchronize initialData when fetched asynchronously
+  useEffect(() => {
+    if (initialData) {
+      reset(initialData)
+    }
+  }, [initialData, reset])
 
   const { fields, append, remove } = useFieldArray({
     name: 'goals',
@@ -87,16 +97,16 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
 
       if (deleteError) throw deleteError
 
-      // Insert new goals
+      // Insert new goals with dynamic safe mapping
       const goalsToInsert = data.goals.map(goal => ({
         employee_id: user.id,
-        thrust_area: goal.thrust_area,
-        goal_title: goal.goal_title,
-        description: goal.description,
-        uom_type: goal.uom_type,
-        measurement_type: goal.measurement_type,
+        thrust_area: goal.thrust_area || '',
+        goal_title: goal.goal_title || '',
+        description: goal.description || '',
+        uom_type: goal.uom_type || '',
+        measurement_type: goal.measurement_type || '',
         target_value: isNaN(Number(goal.target_value)) ? 0 : Number(goal.target_value),
-        weightage: isNaN(Number(goal.weightage)) ? 10 : Number(goal.weightage),
+        weightage: isNaN(Number(goal.weightage)) ? 0 : Number(goal.weightage),
         status: data.status,
       }))
 
@@ -170,7 +180,10 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                 {fields.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => remove(index)}
+                    onClick={() => {
+                      remove(index)
+                      setTimeout(() => trigger(), 0)
+                    }}
                     className="text-destructive hover:bg-destructive/10 p-1 rounded transition-colors"
                     title="Remove Goal"
                   >
@@ -314,7 +327,10 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
           
           <button
             type="button"
-            onClick={handleSubmit((data) => onSubmit(data, 'draft'))}
+            onClick={async () => {
+              const data = getValues()
+              await onSubmit(data, 'draft')
+            }}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-4 py-2 border border-primary text-primary font-medium rounded-lg hover:bg-primary/10 transition-colors"
           >
@@ -324,7 +340,13 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
           
           <button
             type="button"
-            onClick={handleSubmit((data) => onSubmit(data, 'pending_approval'))}
+            onClick={handleSubmit(
+              (data) => onSubmit(data, 'pending_approval'),
+              (errs) => {
+                console.warn('Form validation errors:', errs)
+                toast('Please fill all required fields correctly before submitting.', 'warning')
+              }
+            )}
             disabled={isSubmitting}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
           >
