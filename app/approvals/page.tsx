@@ -3,13 +3,12 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useState, useEffect } from 'react'
-import { CheckCircle2, XCircle, MessageCircle, Clock, Save, Edit2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useAuth } from '@/components/providers/auth-provider'
+import { CheckCircle2, XCircle, MessageCircle, Clock } from 'lucide-react'
+import { api } from '@/services/api'
 import { useToast } from '@/components/providers/toast-provider'
 
 interface Goal {
-  id: number
+  id: string
   employee_id: string
   goal_title: string
   description: string
@@ -22,23 +21,17 @@ interface Goal {
   created_at: string
 }
 
-interface UserProfile {
-  id: string
-  name: string
-  email: string
-}
-
 interface EmployeeSubmission {
-  employeeId: string
-  employeeName: string
-  email: string
+  id: string
+  employee_id: string
+  employee_name: string
+  employee_email: string
+  period?: string
   status: 'pending_approval' | 'approved' | 'rejected' | string
-  submittedDate: string
   goals: Goal[]
 }
 
 export default function ApprovalsPage() {
-  const { user } = useAuth()
   const { toast } = useToast()
   const [submissions, setSubmissions] = useState<EmployeeSubmission[]>([])
   const [selectedSubmission, setSelectedSubmission] = useState<EmployeeSubmission | null>(null)
@@ -48,11 +41,12 @@ export default function ApprovalsPage() {
   const [error, setError] = useState<string | null>(null)
 
   // Edit state for inline editing
-  const [editedGoals, setEditedGoals] = useState<Record<number, Partial<Goal>>>({})
+  const [editedGoals, setEditedGoals] = useState<Record<string, Partial<Goal>>>({})
 
   const getSubmissionAge = (goals: Goal[]) => {
-    if (goals.length === 0) return 0
+    if (!goals || goals.length === 0) return 0
     const oldest = Math.min(...goals.map(g => new Date(g.created_at).getTime()))
+    if (isNaN(oldest)) return 0
     return Math.max(0, Math.round((Date.now() - oldest) / (1000 * 60 * 60 * 24)))
   }
 
@@ -60,53 +54,16 @@ export default function ApprovalsPage() {
     setIsLoading(true)
     setError(null)
     try {
-      // Fetch all goals that aren't drafts
-      const { data: goals, error: goalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .neq('status', 'draft')
-        .order('created_at', { ascending: false })
-
-      if (goalsError) throw goalsError
-
-      if (!goals || goals.length === 0) {
+      const data = await api.getPendingApprovals()
+      if (data && data.submissions) {
+        setSubmissions(data.submissions)
+        setSelectedSubmission(prev => {
+          if (!prev && data.submissions.length > 0) return data.submissions[0]
+          return prev
+        })
+      } else {
         setSubmissions([])
-        setIsLoading(false)
-        return
       }
-
-      // Extract unique employee IDs
-      const employeeIds = [...new Set(goals.map((g: any) => g.employee_id))]
-
-      // Fetch users — may return empty array if RLS restricts cross-user reads
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, name, email')
-        .in('id', employeeIds)
-
-      const userMap = new Map<string, UserProfile>()
-      users?.forEach((u: any) => userMap.set(u.id, u))
-
-      // Group goals by employee
-      const grouped = new Map<string, EmployeeSubmission>()
-
-      goals.forEach((goal: any) => {
-        if (!grouped.has(goal.employee_id)) {
-          const emp = userMap.get(goal.employee_id)
-          const shortId = goal.employee_id.split('-')[0]
-          grouped.set(goal.employee_id, {
-            employeeId: goal.employee_id,
-            employeeName: emp?.name || emp?.email?.split('@')[0] || `Employee (${shortId})`,
-            email: emp?.email || goal.employee_id,
-            status: goal.status, // take status of the first goal
-            submittedDate: new Date(goal.created_at).toLocaleDateString(),
-            goals: []
-          })
-        }
-        grouped.get(goal.employee_id)!.goals.push(goal)
-      })
-
-      setSubmissions(Array.from(grouped.values()))
     } catch (err: any) {
       console.error('Error fetching approvals:', err)
       setError(err.message || 'Failed to load approvals')
@@ -122,71 +79,36 @@ export default function ApprovalsPage() {
   // Auto-select updated submission when list updates to refresh the UI
   useEffect(() => {
     if (selectedSubmission) {
-      const updated = submissions.find(s => s.employeeId === selectedSubmission.employeeId)
+      const updated = submissions.find(s => s.id === selectedSubmission.id)
       if (updated) setSelectedSubmission(updated)
     }
   }, [submissions])
 
   const handleAction = async (action: 'approved' | 'rejected') => {
-    if (!selectedSubmission || !user) return
+    if (!selectedSubmission) return
     setIsSaving(true)
     setError(null)
 
     try {
-      // 1. Update goals with new status and any inline edits
+      // 1. Prepare goals for backend
       const goalsToUpdate = selectedSubmission.goals.map(g => {
         const edits = editedGoals[g.id] || {}
         return {
           id: g.id,
-          status: action,
           target_value: edits.target_value !== undefined ? edits.target_value : g.target_value,
           weightage: edits.weightage !== undefined ? edits.weightage : g.weightage,
         }
       })
 
-      for (const update of goalsToUpdate) {
-        const { error: updateErr } = await supabase
-          .from('goals')
-          .update({
-            status: update.status,
-            target_value: update.target_value,
-            weightage: update.weightage
-          })
-          .eq('id', update.id)
-          
-        if (updateErr) throw updateErr
+      // 2. Call backend
+      await api.updateSubmissionStatus(selectedSubmission.id, {
+        action,
+        remarks: feedbackText || '',
+        goals: goalsToUpdate
+      })
 
-        // 2. Insert tracking record in approvals table
-        const { error: approvalErr } = await supabase
-          .from('approvals')
-          .insert({
-            manager_id: user.id,
-            goal_id: update.id,
-            approval_action: action,
-            remarks: feedbackText || null
-          })
-
-        if (approvalErr) throw approvalErr
-      }
-
-      // Update local state to reflect UI changes instantly
-      setSubmissions(prev => 
-        prev.map(s => {
-          if (s.employeeId === selectedSubmission.employeeId) {
-            return {
-              ...s,
-              status: action,
-              goals: s.goals.map(g => ({
-                ...g,
-                status: action,
-                target_value: editedGoals[g.id]?.target_value ?? g.target_value,
-                weightage: editedGoals[g.id]?.weightage ?? g.weightage
-              }))
-            }
-          }
-          return s
-        })
-      )
+      // Refresh data from the backend to ensure frontend state matches PostgreSQL
+      await fetchApprovals()
       
       setFeedbackText('')
       setEditedGoals({})
@@ -200,7 +122,7 @@ export default function ApprovalsPage() {
     }
   }
 
-  const handleInlineEdit = (goalId: number, field: 'target_value' | 'weightage', value: string) => {
+  const handleInlineEdit = (goalId: string, field: 'target_value' | 'weightage', value: string) => {
     const numValue = value === '' ? 0 : Number(value)
     if (isNaN(numValue)) return
 
@@ -285,14 +207,14 @@ export default function ApprovalsPage() {
               <div className="space-y-3">
                 {submissions.map((sub) => (
                   <button
-                    key={sub.employeeId}
+                    key={sub.id}
                     onClick={() => {
                       setSelectedSubmission(sub)
                       setEditedGoals({})
                       setFeedbackText('')
                     }}
                     className={`w-full text-left p-4 rounded-lg border-2 transition-all duration-200 ${
-                      selectedSubmission?.employeeId === sub.employeeId
+                      selectedSubmission?.id === sub.id
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
                     }`}
@@ -302,7 +224,7 @@ export default function ApprovalsPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-2xl">🎯</span>
                           <div>
-                            <p className="font-medium text-foreground">{sub.employeeName}</p>
+                            <p className="font-medium text-foreground">{sub.employee_name}</p>
                             <p className="text-xs text-muted-foreground">{sub.goals.length} Goals Submitted</p>
                           </div>
                         </div>
@@ -340,7 +262,7 @@ export default function ApprovalsPage() {
         {/* Detail Panel */}
         <div className="xl:col-span-2">
           {selectedSubmission ? (
-            <DashboardCard title={`Review Goals: ${selectedSubmission.employeeName}`}>
+            <DashboardCard title={`Review Goals: ${selectedSubmission.employee_name}`}>
               <div className="space-y-6">
                 
                 {/* Goals List */}
@@ -369,7 +291,7 @@ export default function ApprovalsPage() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase">Measurement</p>
-                            <p className="text-sm font-medium capitalize">{goal.measurement_type.replace('_', ' ')}</p>
+                            <p className="text-sm font-medium capitalize">{goal.measurement_type?.replace('_', ' ')}</p>
                           </div>
                           
                           {/* Editable Fields */}
