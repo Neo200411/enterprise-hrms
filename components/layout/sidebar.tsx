@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X, BarChart3, Users, Target, CheckCircle2, Clock, Settings, LogOut, CalendarCheck } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '../providers/auth-provider'
 
 interface NavItem {
   label: string
@@ -19,6 +20,7 @@ interface SidebarProps {
 export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(false)
   const pathname = usePathname()
+  const { logout } = useAuth()
 
   const getNavItems = (): NavItem[] => {
     const baseItems = [
@@ -160,8 +162,8 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
           </Link>
           <button
             onClick={() => {
-              // Handle logout
               setIsOpen(false)
+              logout()
             }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sidebar-foreground hover:bg-sidebar-accent/20 transition-colors duration-200"
           >

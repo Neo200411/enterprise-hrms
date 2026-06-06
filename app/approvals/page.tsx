@@ -80,7 +80,13 @@ export default function ApprovalsPage() {
   useEffect(() => {
     if (selectedSubmission) {
       const updated = submissions.find(s => s.id === selectedSubmission.id)
-      if (updated) setSelectedSubmission(updated)
+      if (updated) {
+        setSelectedSubmission(updated)
+      } else {
+        setSelectedSubmission(submissions.length > 0 ? submissions[0] : null)
+      }
+    } else if (submissions.length > 0) {
+      setSelectedSubmission(submissions[0])
     }
   }, [submissions])
 

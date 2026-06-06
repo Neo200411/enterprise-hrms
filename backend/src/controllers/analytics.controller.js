@@ -77,7 +77,7 @@ export const getDashboardMetrics = async (req, res) => {
           g.id,
           g.goal_title as title,
           COALESCE(u.name, split_part(u.email, '@', 1)) as employee,
-          EXTRACT(DAY FROM (NOW() - gs.created_at))::int as ageDays
+          EXTRACT(DAY FROM (NOW() - gs.created_at))::int as "ageDays"
         FROM public.goals g
         JOIN public.goal_submissions gs ON g.submission_id = gs.id
         JOIN public.users u ON gs.user_id = u.id
@@ -204,3 +204,99 @@ export const exportGoalsData = async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+// Manager Dashboard Metrics
+export const getManagerDashboard = async (req, res) => {
+  try {
+    const [
+      teamCountResult,
+      goalsCountResult,
+      pendingCountResult,
+      performanceResult,
+      statusResult
+    ] = await Promise.all([
+      query(`SELECT COUNT(*)::int as count FROM public.users WHERE role IN ('employee', 'manager')`),
+      
+      query(`SELECT COUNT(*)::int as count FROM public.goals g JOIN public.goal_submissions gs ON g.submission_id = gs.id WHERE gs.status = 'approved'`),
+      
+      query(`SELECT COUNT(*)::int as count FROM public.goal_submissions WHERE status = 'pending_approval'`),
+      
+      query(`
+        WITH user_scores AS (
+          SELECT 
+            u.id,
+            COALESCE(AVG(gc.actual_achievement), 0) as avg_score
+          FROM public.users u
+          LEFT JOIN public.goal_submissions gs ON gs.user_id = u.id AND gs.status = 'approved'
+          LEFT JOIN public.goals g ON g.submission_id = gs.id
+          LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
+          WHERE u.role IN ('employee', 'manager')
+          GROUP BY u.id
+        )
+        SELECT 
+          ROUND(AVG(avg_score))::int as team_score,
+          SUM(CASE WHEN avg_score >= 90 THEN 1 ELSE 0 END)::int as excellent_count,
+          SUM(CASE WHEN avg_score >= 80 AND avg_score < 90 THEN 1 ELSE 0 END)::int as good_count,
+          SUM(CASE WHEN avg_score < 80 THEN 1 ELSE 0 END)::int as needs_improvement_count
+        FROM user_scores
+      `),
+      
+      query(`
+        SELECT 
+          CASE 
+            WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
+            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress') THEN 'In Progress'
+            WHEN LOWER(gc.progress_status) = 'blocked' THEN 'Blocked'
+            ELSE 'Pending'
+          END as status,
+          COUNT(g.id)::int as count
+        FROM public.goals g
+        JOIN public.goal_submissions gs ON g.submission_id = gs.id AND gs.status = 'approved'
+        LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
+        GROUP BY 1
+      `)
+    ]);
+
+    const teamMembers = teamCountResult.rows[0]?.count || 0;
+    const activeGoals = goalsCountResult.rows[0]?.count || 0;
+    const approvalsPending = pendingCountResult.rows[0]?.count || 0;
+    
+    const perfData = performanceResult.rows[0] || { team_score: 0, excellent_count: 0, good_count: 0, needs_improvement_count: 0 };
+    const teamScore = perfData.team_score || 0;
+    const totalScoredMembers = perfData.excellent_count + perfData.good_count + perfData.needs_improvement_count;
+    
+    const getPct = (count) => totalScoredMembers > 0 ? Math.round((count / totalScoredMembers) * 100) : 0;
+    
+    const performanceDistribution = [
+      { label: 'Excellent (90-100%)', count: perfData.excellent_count, percentage: getPct(perfData.excellent_count), color: 'bg-status-success' },
+      { label: 'Good (80-89%)', count: perfData.good_count, percentage: getPct(perfData.good_count), color: 'bg-primary' },
+      { label: 'Needs Improvement (<80%)', count: perfData.needs_improvement_count, percentage: getPct(perfData.needs_improvement_count), color: 'bg-status-pending' }
+    ];
+
+    // Ensure all 4 requested canonical statuses are returned even if count is 0
+    const rawStatusCounts = statusResult.rows.reduce((acc, row) => {
+      acc[row.status] = row.count;
+      return acc;
+    }, {});
+
+    const goalStatusBreakdown = [
+      { status: 'In Progress', count: rawStatusCounts['In Progress'] || 0, color: 'bg-primary' },
+      { status: 'Completed', count: rawStatusCounts['Completed'] || 0, color: 'bg-status-success' },
+      { status: 'Pending', count: rawStatusCounts['Pending'] || 0, color: 'bg-status-pending' },
+      { status: 'Blocked', count: rawStatusCounts['Blocked'] || 0, color: 'bg-destructive' }
+    ];
+
+    res.json({
+      teamMembers,
+      activeGoals,
+      approvalsPending,
+      teamScore,
+      performanceDistribution,
+      goalStatusBreakdown
+    });
+  } catch (error) {
+    console.error('Error fetching manager dashboard:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+

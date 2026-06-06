@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export default function Header({ userName, userRole }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
-  const { signOut } = useAuth()
+  const { logout } = useAuth()
 
   const getRoleLabel = () => {
     const roles: Record<string, string> = {
@@ -65,7 +65,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
                 </button>
                 <hr className="my-1 border-border" />
                 <button 
-                  onClick={() => signOut()}
+                  onClick={() => logout()}
                   className="w-full text-left px-3 py-2 text-sm rounded hover:bg-destructive/10 text-destructive transition-colors"
                 >
                   Logout

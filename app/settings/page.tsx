@@ -2,213 +2,338 @@
 
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
-import { User, Bell, Lock, LogOut } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Bell, Lock, User, Save, Shield, Mail } from 'lucide-react'
+import { useAuth } from '@/components/providers/auth-provider'
+import { api } from '@/services/api'
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState({
-    fullName: 'Jane Smith',
-    email: 'jane@example.com',
-    department: 'Engineering',
-    notifications: {
-      goalUpdates: true,
-      reviews: true,
-      approvals: true,
-      weeklyReport: false,
-    },
-    privacy: 'public',
+  const { user } = useAuth()
+  const [activeTab, setActiveTab] = useState('profile')
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Profile Form State
+  const [profile, setProfile] = useState({
+    fullName: '',
+    email: '',
+    role: '',
   })
 
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  // Settings State (Backend Persisted)
+  const [notifications, setNotifications] = useState({
+    goalUpdates: true,
+    approvalNotifications: true,
+    weeklySummary: false,
+  })
+
+  const [privacy, setPrivacy] = useState('public')
+
+  useEffect(() => {
+    // Sync authenticated user profile data
+    if (user) {
+      setProfile(prev => ({
+        ...prev,
+        fullName: user.name || '',
+        email: user.email || '',
+        role: user.role || ''
+      }))
+    }
+  }, [user])
+
+  useEffect(() => {
+    // Fetch user settings from backend
+    const fetchSettings = async () => {
+      try {
+        setIsLoading(true)
+        const data = await api.getUserSettings()
+        setNotifications({
+          goalUpdates: data.goalUpdates ?? true,
+          approvalNotifications: data.approvalNotifications ?? true,
+          weeklySummary: data.weeklySummary ?? false,
+        })
+        setPrivacy(data.profileVisibility ?? 'public')
+      } catch (error) {
+        console.error('Failed to load settings:', error)
+        setErrorMessage('Failed to load settings. Please refresh and try again.')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchSettings()
+  }, [])
 
   const handleSave = async () => {
     setSaveStatus('saving')
-    setTimeout(() => {
+    setErrorMessage(null)
+    
+    try {
+      await api.updateUserSettings({
+        goalUpdates: notifications.goalUpdates,
+        approvalNotifications: notifications.approvalNotifications,
+        weeklySummary: notifications.weeklySummary,
+        profileVisibility: privacy
+      })
+      
       setSaveStatus('saved')
-      setTimeout(() => setSaveStatus('idle'), 2000)
-    }, 500)
+      setTimeout(() => setSaveStatus('idle'), 3000)
+    } catch (error: any) {
+      console.error('Failed to save settings:', error)
+      setSaveStatus('error')
+      setErrorMessage(error.message || 'Failed to save settings')
+      setTimeout(() => setSaveStatus('idle'), 5000)
+    }
   }
 
   return (
     <AppLayout>
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground mb-2">Settings</h1>
-        <p className="text-muted-foreground">Manage your profile and preferences</p>
+        <p className="text-muted-foreground">Manage your account preferences and settings</p>
       </div>
 
-      {/* Profile Section */}
-      <DashboardCard
-        title="Profile"
-        description="Update your personal information"
-        className="mb-6"
-      >
-        <div className="space-y-4">
-          {/* Avatar */}
-          <div className="flex items-center gap-4 pb-4 border-b border-border">
-            <div className="w-16 h-16 bg-primary rounded-lg flex items-center justify-center font-bold text-primary-foreground text-2xl">
-              {settings.fullName.charAt(0)}
-            </div>
-            <div>
-              <p className="font-medium text-foreground">{settings.fullName}</p>
-              <p className="text-sm text-muted-foreground">{settings.email}</p>
-              <button className="text-sm text-primary hover:text-primary/80 mt-1 font-medium">
-                Change Photo
-              </button>
-            </div>
-          </div>
-
-          {/* Form Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Full Name
-              </label>
-              <input
-                type="text"
-                value={settings.fullName}
-                onChange={(e) => setSettings({ ...settings, fullName: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                value={settings.email}
-                onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-foreground mb-2">
-                Department
-              </label>
-              <input
-                type="text"
-                value={settings.department}
-                onChange={(e) => setSettings({ ...settings, department: e.target.value })}
-                className="w-full px-3 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-                disabled
-              />
-            </div>
-          </div>
-        </div>
-      </DashboardCard>
-
-      {/* Notifications Section */}
-      <DashboardCard
-        title="Notifications"
-        description="Control what updates you receive"
-        className="mb-6"
-      >
-        <div className="space-y-4">
-          {[
-            {
-              key: 'goalUpdates',
-              label: 'Goal Updates',
-              description: 'Get notified when someone comments on your goals',
-            },
-            {
-              key: 'reviews',
-              label: 'Performance Reviews',
-              description: 'Receive reminders for review submissions and feedback',
-            },
-            {
-              key: 'approvals',
-              label: 'Approvals',
-              description: 'Get notifications when your submissions are approved or rejected',
-            },
-            {
-              key: 'weeklyReport',
-              label: 'Weekly Report',
-              description: 'Receive a weekly summary of your performance metrics',
-            },
-          ].map((notification) => (
-            <label
-              key={notification.key}
-              className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-secondary/50 cursor-pointer transition-colors duration-200"
-            >
-              <input
-                type="checkbox"
-                checked={settings.notifications[notification.key as keyof typeof settings.notifications]}
-                onChange={(e) =>
-                  setSettings({
-                    ...settings,
-                    notifications: {
-                      ...settings.notifications,
-                      [notification.key]: e.target.checked,
-                    },
-                  })
-                }
-                className="w-4 h-4 border border-border rounded bg-input text-primary mt-1 flex-shrink-0"
-              />
-              <div className="flex-1">
-                <p className="font-medium text-foreground">{notification.label}</p>
-                <p className="text-sm text-muted-foreground">{notification.description}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </DashboardCard>
-
-      {/* Privacy Section */}
-      <DashboardCard
-        title="Privacy & Security"
-        description="Manage your account security settings"
-        className="mb-6"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-foreground mb-2">
-              Profile Visibility
-            </label>
-            <select
-              value={settings.privacy}
-              onChange={(e) => setSettings({ ...settings, privacy: e.target.value })}
-              className="w-full px-3 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-            >
-              <option value="public">Public - Visible to everyone</option>
-              <option value="team">Team Only - Visible to your team</option>
-              <option value="private">Private - Only visible to you</option>
-            </select>
-          </div>
-
-          <button className="flex items-center gap-2 px-4 py-2 border border-border text-foreground font-medium rounded-lg hover:bg-secondary transition-colors duration-200">
-            <Lock className="w-4 h-4" />
-            Change Password
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Settings Sidebar */}
+        <div className="w-full md:w-64 space-y-1">
+          <button
+            onClick={() => setActiveTab('profile')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'profile'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+            }`}
+          >
+            <User className="w-4 h-4" />
+            Profile Information
           </button>
-
-          <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-            <p className="text-sm font-medium text-destructive mb-2">Danger Zone</p>
-            <button className="text-sm text-destructive hover:text-destructive/80 font-medium">
-              Delete Account
-            </button>
-          </div>
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'notifications'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+            }`}
+          >
+            <Bell className="w-4 h-4" />
+            Notifications
+          </button>
+          <button
+            onClick={() => setActiveTab('privacy')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'privacy'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-secondary/50 hover:text-foreground'
+            }`}
+          >
+            <Shield className="w-4 h-4" />
+            Privacy & Security
+          </button>
         </div>
-      </DashboardCard>
 
-      {/* Save Button */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={handleSave}
-          disabled={saveStatus !== 'idle'}
-          className={`flex items-center gap-2 px-6 py-2 font-medium rounded-lg transition-all duration-200 ${
-            saveStatus === 'saved'
-              ? 'bg-status-success text-white'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
-          } disabled:opacity-50`}
-        >
-          {saveStatus === 'saving' && <span className="spinner"></span>}
-          {saveStatus === 'idle' && 'Save Changes'}
-          {saveStatus === 'saved' && '✓ Saved'}
-        </button>
+        {/* Settings Content */}
+        <div className="flex-1">
+          <DashboardCard title={
+            activeTab === 'profile' ? 'Profile Information' :
+            activeTab === 'notifications' ? 'Notification Preferences' :
+            'Privacy & Security'
+          }>
+            {isLoading && activeTab !== 'profile' ? (
+              <div className="py-8 text-center text-muted-foreground animate-pulse">
+                Loading settings...
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Profile Tab */}
+                {activeTab === 'profile' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 mb-6">
+                      <div className="w-20 h-20 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-2xl font-bold uppercase">
+                        {profile.fullName.charAt(0)}
+                      </div>
+                      <button className="px-4 py-2 text-sm font-medium text-primary hover:bg-primary/10 rounded-lg transition-colors">
+                        Change Avatar
+                      </button>
+                    </div>
 
-        <button className="flex items-center gap-2 px-4 py-2 border border-border text-destructive hover:bg-destructive/5 font-medium rounded-lg transition-colors duration-200">
-          <LogOut className="w-4 h-4" />
-          Logout
-        </button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Full Name</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={profile.fullName}
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground disabled:opacity-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Email</label>
+                        <input
+                          type="email"
+                          disabled
+                          value={profile.email}
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground disabled:opacity-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-foreground mb-1">Role</label>
+                        <input
+                          type="text"
+                          disabled
+                          value={profile.role}
+                          className="w-full px-4 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground capitalize disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Notifications Tab */}
+                {activeTab === 'notifications' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <p className="font-medium text-foreground">Goal Updates</p>
+                        <p className="text-sm text-muted-foreground">Receive notifications when your goals are approved or commented on.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={notifications.goalUpdates}
+                          onChange={(e) => setNotifications({ ...notifications, goalUpdates: e.target.checked })}
+                        />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <p className="font-medium text-foreground">Approval Reminders</p>
+                        <p className="text-sm text-muted-foreground">Get notified when you have pending goals to review.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={notifications.approvalNotifications}
+                          onChange={(e) => setNotifications({ ...notifications, approvalNotifications: e.target.checked })}
+                        />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+
+                    <div className="flex items-center justify-between p-4 rounded-lg border border-border">
+                      <div>
+                        <p className="font-medium text-foreground">Weekly Summary</p>
+                        <p className="text-sm text-muted-foreground">Receive a weekly email digest of team performance.</p>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="sr-only peer"
+                          checked={notifications.weeklySummary}
+                          onChange={(e) => setNotifications({ ...notifications, weeklySummary: e.target.checked })}
+                        />
+                        <div className="w-11 h-6 bg-secondary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
+                {/* Privacy Tab */}
+                {activeTab === 'privacy' && (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-lg border border-border">
+                      <p className="font-medium text-foreground mb-4">Profile Visibility</p>
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="privacy"
+                            value="public"
+                            checked={privacy === 'public'}
+                            onChange={(e) => setPrivacy(e.target.value)}
+                            className="text-primary focus:ring-primary"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Public (Company-wide)</p>
+                            <p className="text-xs text-muted-foreground">Anyone in the company can see your profile and goals</p>
+                          </div>
+                        </label>
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="privacy"
+                            value="team"
+                            checked={privacy === 'team'}
+                            onChange={(e) => setPrivacy(e.target.value)}
+                            className="text-primary focus:ring-primary"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Team Only</p>
+                            <p className="text-xs text-muted-foreground">Only your direct team and manager can see your goals</p>
+                          </div>
+                        </label>
+                        <label className="flex items-center gap-3">
+                          <input
+                            type="radio"
+                            name="privacy"
+                            value="private"
+                            checked={privacy === 'private'}
+                            onChange={(e) => setPrivacy(e.target.value)}
+                            className="text-primary focus:ring-primary"
+                          />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">Private</p>
+                            <p className="text-xs text-muted-foreground">Only you and your manager can see your goals</p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-secondary/50 border border-border flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Lock className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium text-foreground text-sm">Password & Authentication</p>
+                          <p className="text-xs text-muted-foreground">Update your password or enable 2FA</p>
+                        </div>
+                      </div>
+                      <button className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-50">
+                        Manage
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Status Messages */}
+                {saveStatus === 'error' && (
+                  <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg">
+                    {errorMessage || 'Failed to save settings. Please try again.'}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex justify-end gap-3 pt-6 border-t border-border mt-8">
+                  <button className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-50">
+                    Cancel
+                  </button>
+                  {activeTab !== 'profile' && (
+                    <button
+                      onClick={handleSave}
+                      disabled={saveStatus === 'saving' || isLoading}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4" />
+                      {saveStatus === 'saving' ? 'Saving...' : saveStatus === 'saved' ? 'Saved!' : 'Save Changes'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </DashboardCard>
+        </div>
       </div>
     </AppLayout>
   )

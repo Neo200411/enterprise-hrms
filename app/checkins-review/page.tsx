@@ -3,8 +3,8 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
-import { AlertCircle, Users, Target, TrendingUp, CheckCircle, Clock } from 'lucide-react'
+import { api } from '@/services/api'
+import { AlertCircle, Users } from 'lucide-react'
 
 interface Goal {
   id: string
@@ -15,10 +15,11 @@ interface Goal {
   uom_type: string
   target_value: number
   weightage: number
+  employee_name?: string
+  employee_email?: string
 }
 
 interface Checkin {
-  id: string
   goal_id: string
   quarter: string
   actual_achievement: number | null
@@ -50,12 +51,9 @@ export default function CheckinsReviewPage() {
     setIsLoading(true)
     setError(null)
     try {
-      // Fetch all approved goals
-      const { data: goals, error: goalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('status', 'approved')
-      if (goalsError) throw goalsError
+      const data = await api.getTeamCheckins(selectedQuarter)
+      const goals: Goal[] = data?.goals || []
+      const checkins: Checkin[] = data?.checkins || []
 
       if (!goals || goals.length === 0) {
         setGroups([])
@@ -63,43 +61,29 @@ export default function CheckinsReviewPage() {
         return
       }
 
-      // Fetch check-ins for this quarter
-      const goalIds = goals.map((g: Goal) => g.id)
-      const { data: checkins } = await supabase
-        .from('goal_checkins')
-        .select('*')
-        .in('goal_id', goalIds)
-        .eq('quarter', selectedQuarter)
-
-      // Fetch unique employee IDs
-      const employeeIds = [...new Set(goals.map((g: Goal) => g.employee_id))]
-      const { data: users } = await supabase
-        .from('users')
-        .select('id, name, email')
-        .in('id', employeeIds)
-
-      const userMap: Record<string, Employee> = {}
-      for (const u of (users || [])) {
-        userMap[u.id] = u
-      }
-
       // Group goals + checkins by employee
       const grouped: Record<string, EmployeeCheckinGroup> = {}
+      const goalMap = new Map<string, Goal>()
+      
       for (const goal of goals) {
+        goalMap.set(goal.id, goal)
         const empId = goal.employee_id
         if (!grouped[empId]) {
-          const emp = userMap[empId]
           const shortId = empId.split('-')[0]
           grouped[empId] = {
-            employee: emp || { id: empId, name: `Employee (${shortId})`, email: empId },
+            employee: { 
+              id: empId, 
+              name: goal.employee_name || `Employee (${shortId})`, 
+              email: goal.employee_email || empId 
+            },
             goals: [],
             checkins: {},
           }
         }
         grouped[empId].goals.push(goal)
       }
-      for (const c of (checkins || [])) {
-        const goal = goals.find((g: Goal) => g.id === c.goal_id)
+      for (const c of checkins) {
+        const goal = goalMap.get(c.goal_id)
         if (goal) {
           grouped[goal.employee_id].checkins[c.goal_id] = c
         }
@@ -107,15 +91,21 @@ export default function CheckinsReviewPage() {
 
       const result = Object.values(grouped)
       setGroups(result)
-      if (!selectedEmployeeId && result.length > 0) {
-        setSelectedEmployeeId(result[0].employee.id)
+      
+      // Auto-select first employee if none selected, or if selected is no longer in list
+      if (!selectedEmployeeId || !result.find(g => g.employee.id === selectedEmployeeId)) {
+        if (result.length > 0) {
+          setSelectedEmployeeId(result[0].employee.id)
+        } else {
+          setSelectedEmployeeId(null)
+        }
       }
     } catch (err: any) {
       setError(err.message || 'Failed to load check-in data.')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedQuarter])
+  }, [selectedQuarter, selectedEmployeeId])
 
   useEffect(() => { fetchData() }, [fetchData])
 

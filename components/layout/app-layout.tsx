@@ -21,7 +21,7 @@ export default function AppLayout({
   }
 
   const effectiveRole = role || 'employee'
-  const effectiveName = user?.email?.split('@')[0] || 'User'
+  const effectiveName = user?.name || user?.email?.split('@')[0] || 'User'
 
   return (
     <div className="flex h-screen bg-background">

@@ -3,7 +3,7 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useState, useEffect } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
 import {
   Users, Target, CheckCircle2, Clock, TrendingUp, AlertCircle, Download, AlertTriangle, MessageSquare, ShieldAlert
 } from 'lucide-react'
@@ -24,12 +24,10 @@ interface KPIs {
 
 interface ActivityRow {
   id: string
-  goal_id: string
-  reviewer_id: string
+  goal_title: string
+  reviewer_name: string
   action: string
   created_at: string
-  goal_title?: string
-  reviewer_name?: string
 }
 
 interface QoqTrend {
@@ -100,170 +98,16 @@ export default function AnalyticsDashboard() {
       setIsLoading(true)
       setError(null)
       try {
-        // Parallel fetches from Supabase
-        const [
-          { count: empCount },
-          { count: totalGoals },
-          { count: approvedGoals },
-          { count: pendingGoals },
-          { data: checkins },
-          { data: allGoals },
-          { data: approvals },
-          { data: allUsers }
-        ] = await Promise.all([
-          supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'employee'),
-          supabase.from('goals').select('*', { count: 'exact', head: true }),
-          supabase.from('goals').select('*', { count: 'exact', head: true }).eq('status', 'approved'),
-          supabase.from('goals').select('*', { count: 'exact', head: true }).eq('status', 'pending_approval'),
-          supabase.from('goal_checkins').select('*'),
-          supabase.from('goals').select('*'),
-          supabase.from('approvals').select('*').order('created_at', { ascending: false }),
-          supabase.from('users').select('*')
-        ])
+        const dashboard = await api.getAnalyticsDashboard()
+        
+        if (dashboard.kpis) setKpis(dashboard.kpis)
+        if (dashboard.statusData) setStatusData(dashboard.statusData)
+        if (dashboard.qoqTrend) setQoqTrend(dashboard.qoqTrend)
+        if (dashboard.thrustData) setThrustData(dashboard.thrustData)
+        if (dashboard.managerKpis) setManagerKpis(dashboard.managerKpis)
+        if (dashboard.escalatedGoals) setEscalatedGoals(dashboard.escalatedGoals)
+        if (dashboard.recentActivity) setActivity(dashboard.recentActivity)
 
-        const approvedGoalIds = new Set((allGoals || []).filter((g: any) => g.status === 'approved').map((g: any) => g.id))
-        const checkedGoalIds = new Set((checkins || []).map((c: any) => c.goal_id))
-        const checkedApproved = [...checkedGoalIds].filter(id => approvedGoalIds.has(id)).length
-        const pct = approvedGoalIds.size > 0 ? Math.round((checkedApproved / approvedGoalIds.size) * 100) : 0
-
-        setKpis({
-          totalEmployees: empCount || 0,
-          totalGoals: totalGoals || 0,
-          approvedGoals: approvedGoals || 0,
-          pendingGoals: pendingGoals || 0,
-          checkinCompletionPct: pct,
-        })
-
-        // --- Live QoQ Achievement Rate Trends ---
-        const quarters = ['Q1', 'Q2', 'Q3', 'Q4']
-        const computedQoq = quarters.map(q => {
-          const qCheckins = (checkins || []).filter((c: any) => c.quarter === q)
-          let totalTarget = 0
-          let totalActual = 0
-          qCheckins.forEach((c: any) => {
-            const parent = (allGoals || []).find((g: any) => g.id === c.goal_id)
-            if (parent && parent.target_value > 0) {
-              totalTarget += parent.target_value
-              totalActual += c.actual_achievement || 0
-            }
-          })
-          const rate = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0
-          // Default fallbacks if no actual check-in data exists in current database, ensuring stunning visuals
-          const fallbacks: Record<string, number> = { Q1: 72, Q2: 81, Q3: 88, Q4: 92 }
-          return {
-            quarter: q,
-            achievementRate: rate > 0 ? Math.min(100, rate) : fallbacks[q] || 80,
-            target: 100
-          }
-        })
-        setQoqTrend(computedQoq)
-
-        // --- Live Thrust Area Distribution ---
-        const thrustCounts: Record<string, number> = {
-          'Financial': 0,
-          'Operational': 0,
-          'Customer': 0,
-          'Learning & Growth': 0
-        }
-        ;(allGoals || []).forEach((g: any) => {
-          const area = g.thrust_area || 'Learning & Growth'
-          const key = area.includes('Learning') ? 'Learning & Growth' : area
-          if (key in thrustCounts) {
-            thrustCounts[key]++
-          } else {
-            thrustCounts[key] = (thrustCounts[key] || 0) + 1
-          }
-        })
-        const computedThrust = Object.entries(thrustCounts).map(([name, value]) => ({
-          name,
-          value: value > 0 ? value : 2 // minimal fallback to ensure gorgeous display
-        }))
-        setThrustData(computedThrust)
-
-        // --- Live Goal Status Distribution ---
-        const statusCounts: Record<string, number> = { draft: 0, pending_approval: 0, approved: 0, rejected: 0 }
-        ;(allGoals || []).forEach((g: any) => {
-          if (g.status in statusCounts) {
-            statusCounts[g.status]++
-          } else {
-            statusCounts.draft++
-          }
-        })
-        const computedStatus = [
-          { name: 'Draft', value: statusCounts.draft || 2, fill: '#64748b' },
-          { name: 'Pending Approval', value: statusCounts.pending_approval || 3, fill: '#f59e0b' },
-          { name: 'Approved', value: statusCounts.approved || 8, fill: '#10b981' },
-          { name: 'Needs Revision', value: statusCounts.rejected || 1, fill: '#ef4444' },
-        ]
-        setStatusData(computedStatus)
-
-        // --- Live Manager Effectiveness Metrics ---
-        let totalHours = 0
-        let durationCount = 0
-        let remarkChars = 0
-        let remarkCount = 0
-        let totalRejections = 0
-        let totalApproved = 0
-
-        ;(approvals || []).forEach((a: any) => {
-          const goal = (allGoals || []).find((g: any) => g.id === a.goal_id)
-          if (goal) {
-            const t1 = new Date(goal.created_at).getTime()
-            const t2 = new Date(a.created_at).getTime()
-            const diffHrs = (t2 - t1) / (1000 * 60 * 60)
-            if (diffHrs > 0) {
-              totalHours += diffHrs
-              durationCount++
-            }
-          }
-          if (a.remarks) {
-            remarkChars += a.remarks.length
-            remarkCount++
-          }
-          if (a.approval_action === 'rejected') totalRejections++
-          if (a.approval_action === 'approved') totalApproved++
-        })
-
-        setManagerKpis({
-          avgApprovalTimeHours: durationCount > 0 ? (totalHours / durationCount).toFixed(1) : '18.4',
-          avgRemarkLength: remarkCount > 0 ? Math.round(remarkChars / remarkCount) : 48,
-          reworkRatePct: (totalRejections + totalApproved) > 0 ? Math.round((totalRejections / (totalRejections + totalApproved)) * 100) : 15
-        })
-
-        // --- Live Escalated/Overdue Approvals Warning (> 7 Days) ---
-        const now = Date.now()
-        const oneDayMs = 24 * 60 * 60 * 1000
-        const computedEscalations = (allGoals || []).filter((g: any) => {
-          if (g.status !== 'pending_approval') return false
-          const ageDays = (now - new Date(g.created_at).getTime()) / oneDayMs
-          return ageDays > 7
-        }).map((g: any) => {
-          const ageDays = Math.max(1, Math.round((now - new Date(g.created_at).getTime()) / oneDayMs))
-          const emp = (allUsers || []).find((u: any) => u.id === g.employee_id)
-          return {
-            id: g.id,
-            title: g.goal_title,
-            employee: emp?.name || emp?.email?.split('@')[0] || 'Employee',
-            ageDays,
-          }
-        })
-        setEscalatedGoals(computedEscalations)
-
-        // Enrich recent activity view
-        if (approvals && approvals.length > 0) {
-          const goalMap: Record<string, string> = {}
-          for (const g of (allGoals || [])) goalMap[g.id] = g.goal_title
-
-          const userMap: Record<string, string> = {}
-          for (const u of (allUsers || [])) userMap[u.id] = u.name || u.email
-
-          setActivity(approvals.slice(0, 5).map((a: any) => ({
-            ...a,
-            action: a.approval_action,
-            goal_title: goalMap[a.goal_id] || 'Goal Review Update',
-            reviewer_name: userMap[a.manager_id] || 'Manager',
-          })))
-        }
       } catch (err: any) {
         console.error(err)
         setError(err.message || 'Failed to load dashboard data.')
@@ -284,45 +128,25 @@ export default function AnalyticsDashboard() {
   }
 
   const handleExportGoals = async () => {
-    const { data: goals } = await supabase
-      .from('goals')
-      .select('id, thrust_area, goal_title, uom_type, target_value, weightage, status, created_at')
-      .order('created_at', { ascending: false })
-    const { data: checkins } = await supabase.from('goal_checkins').select('*')
-    const checkinMap: Record<string, any[]> = {}
-    for (const c of (checkins || [])) {
-      if (!checkinMap[c.goal_id]) checkinMap[c.goal_id] = []
-      checkinMap[c.goal_id].push(c)
+    try {
+      const exportResponse = await api.exportAnalytics()
+      const exportData = exportResponse.data || []
+      const columns = [
+        { key: 'goal_title', label: 'Goal Title' },
+        { key: 'thrust_area', label: 'Thrust Area' },
+        { key: 'uom_type', label: 'UoM' },
+        { key: 'target_value', label: 'Target' },
+        { key: 'actual_achievement', label: 'Actual Achievement' },
+        { key: 'weightage', label: 'Weightage (%)' },
+        { key: 'goal_status', label: 'Goal Status' },
+        { key: 'quarter', label: 'Quarter' },
+        { key: 'progress_status', label: 'Progress Status' },
+        { key: 'created_at', label: 'Created Date' },
+      ]
+      downloadCsv(toCsv(exportData, columns), `goals-report-${Date.now()}.csv`)
+    } catch (err) {
+      console.error('Export failed', err)
     }
-    const rows = (goals || []).flatMap((g: any) => {
-      const gCheckins = checkinMap[g.id]
-      if (gCheckins && gCheckins.length > 0) {
-        return gCheckins.map((c: any) => ({
-          goal_title: g.goal_title, thrust_area: g.thrust_area, uom_type: g.uom_type,
-          target_value: g.target_value, weightage: g.weightage, goal_status: g.status,
-          quarter: c.quarter, actual_achievement: c.actual_achievement,
-          progress_status: c.progress_status,
-          created_at: new Date(g.created_at).toLocaleDateString(),
-        }))
-      }
-      return [{ goal_title: g.goal_title, thrust_area: g.thrust_area, uom_type: g.uom_type,
-        target_value: g.target_value, weightage: g.weightage, goal_status: g.status,
-        quarter: '', actual_achievement: '', progress_status: 'No check-in',
-        created_at: new Date(g.created_at).toLocaleDateString() }]
-    })
-    const columns = [
-      { key: 'goal_title', label: 'Goal Title' },
-      { key: 'thrust_area', label: 'Thrust Area' },
-      { key: 'uom_type', label: 'UoM' },
-      { key: 'target_value', label: 'Target' },
-      { key: 'actual_achievement', label: 'Actual Achievement' },
-      { key: 'weightage', label: 'Weightage (%)' },
-      { key: 'goal_status', label: 'Goal Status' },
-      { key: 'quarter', label: 'Quarter' },
-      { key: 'progress_status', label: 'Progress Status' },
-      { key: 'created_at', label: 'Created Date' },
-    ]
-    downloadCsv(toCsv(rows, columns), `goals-report-${Date.now()}.csv`)
   }
 
   return (

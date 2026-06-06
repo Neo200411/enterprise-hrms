@@ -20,7 +20,7 @@ export default function AuditLogsPage() {
     {
       id: 'LOG001',
       timestamp: '2024-12-01T14:30:00Z',
-      user: 'Jane Smith',
+      user: 'System Administrator',
       action: 'Updated Goal',
       resource: 'Goal #2451',
       status: 'success',

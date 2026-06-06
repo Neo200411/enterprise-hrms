@@ -17,7 +17,7 @@ interface AuthContextType {
   user: User | null
   role: Role
   isLoading: boolean
-  signOut: () => void
+  logout: () => void
   refreshSession: () => Promise<void>
 }
 
@@ -25,7 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
   isLoading: true,
-  signOut: () => {},
+  logout: () => {},
   refreshSession: async () => {},
 })
 
@@ -39,25 +39,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   const refreshSession = async () => {
-    setIsLoading(true)
-    try {
-      const token = localStorage.getItem('hr_token')
-      if (!token) {
-        throw new Error('No token found')
-      }
-      
-      const { user } = await api.getCurrentUser()
-      setUser(user)
-      setRole(user.role as Role)
-    } catch (error) {
-      console.error('Error getting session:', error)
+  setIsLoading(true)
+
+  try {
+    const token = localStorage.getItem('hr_token')
+
+    // User is not logged in yet
+    if (!token) {
       setUser(null)
       setRole(null)
-      localStorage.removeItem('hr_token')
-    } finally {
-      setIsLoading(false)
+      return
     }
+
+    const { user } = await api.getCurrentUser()
+
+    setUser(user)
+    setRole(user.role as Role)
+  } catch (error) {
+    console.error('Error getting session:', error)
+
+    setUser(null)
+    setRole(null)
+    localStorage.removeItem('hr_token')
+  } finally {
+    setIsLoading(false)
   }
+}
 
   useEffect(() => {
     refreshSession()
@@ -103,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, role, isLoading, pathname, router])
 
-  const signOut = () => {
+  const logout = () => {
     localStorage.removeItem('hr_token')
     setUser(null)
     setRole(null)
@@ -111,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, role, isLoading, signOut, refreshSession }}>
+    <AuthContext.Provider value={{ user, role, isLoading, logout, refreshSession }}>
       {children}
     </AuthContext.Provider>
   )

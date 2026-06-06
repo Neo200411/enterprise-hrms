@@ -109,6 +109,27 @@ export const api = {
     return handleResponse(res);
   },
 
+  getTeamMembers: async (page: number = 1, limit: number = 10) => {
+    const res = await fetch(`${API_URL}/team?page=${page}&limit=${limit}`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  getManagerDashboard: async () => {
+    const res = await fetch(`${API_URL}/analytics/manager-dashboard`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  getEmployeeDashboard: async () => {
+    const res = await fetch(`${API_URL}/dashboard/employee`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
   // --- Analytics (Admin) ---
   getAnalyticsDashboard: async () => {
     const res = await fetch(`${API_URL}/analytics/dashboard`, {
@@ -117,9 +138,32 @@ export const api = {
     return handleResponse(res);
   },
 
+  getEmployees: async () => {
+    const res = await fetch(`${API_URL}/employees`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
   exportAnalytics: async () => {
     const res = await fetch(`${API_URL}/analytics/export`, {
       headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+  // --- Settings ---
+  getUserSettings: async () => {
+    const res = await fetch(`${API_URL}/settings`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  updateUserSettings: async (settings: any) => {
+    const res = await fetch(`${API_URL}/settings`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(settings)
     });
     return handleResponse(res);
   }
