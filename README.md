@@ -12,7 +12,7 @@ The portal supports role-based access for Employees, Managers, and Admins using 
 
 ### Authentication & Role Management
 
-* Secure login using Supabase Authentication
+* Secure JWT Authentication
 * Role-based dashboards for:
   * Employee
   * Manager
@@ -54,7 +54,9 @@ The portal supports role-based access for Employees, Managers, and Admins using 
 
 ### Backend & Database
 
-* Supabase (Auth & PostgreSQL)
+* Express.js Backend
+* PostgreSQL Database (Supabase)
+* JWT Authentication
 
 ### Validation & Forms
 
@@ -73,6 +75,15 @@ The portal supports role-based access for Employees, Managers, and Admins using 
 
 ---
 
+## Architecture
+
+1. Next.js App Router (Frontend)
+2. Express.js (Backend REST API)
+3. PostgreSQL (Database)
+4. JWT Authentication & RBAC
+
+---
+
 ## Workflow
 
 1. **Employee** → Create Goals → Submit for Approval
@@ -88,8 +99,8 @@ The portal supports role-based access for Employees, Managers, and Admins using 
 ### Clone Repository
 
 ```bash
-git clone https://github.com/Neo200411/atomberg_comp.git
-cd atomberg_comp
+git clone https://github.com/Neo200411/enterprise-hrms.git
+cd enterprise-hrms
 ```
 
 ### Install Dependencies
@@ -107,8 +118,15 @@ yarn install
 Create a `.env.local` file:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+NEXT_PUBLIC_API_URL=http://localhost:5001/api
+```
+
+And in the `backend/` directory, create a `.env`:
+
+```env
+DATABASE_URL=your_postgresql_connection_string
+JWT_SECRET=your_jwt_secret
+PORT=5001
 ```
 
 ### Run Development Server
