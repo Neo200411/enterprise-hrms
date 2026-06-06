@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes.js';
 import goalRoutes from './routes/goal.routes.js';
 import approvalRoutes from './routes/approval.routes.js';
+import checkinRoutes from './routes/checkin.routes.js';
 
 dotenv.config();
 
@@ -16,6 +17,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/approvals', approvalRoutes);
+app.use('/api/checkins', checkinRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
