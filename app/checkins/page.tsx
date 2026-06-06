@@ -3,7 +3,7 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
 import { useAuth } from '@/components/providers/auth-provider'
 import { useToast } from '@/components/providers/toast-provider'
 import { Save, CheckCircle, Clock, Target, AlertCircle, Download, AlertTriangle } from 'lucide-react'
@@ -41,38 +41,16 @@ export default function CheckinsPage() {
   const [savedGoalIds, setSavedGoalIds] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
-  const fetchGoals = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (!user) return
     setIsLoading(true)
     setError(null)
     try {
-      const { data, error: goalsError } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('employee_id', user.id)
-        .eq('status', 'approved')
-        .order('thrust_area')
-      if (goalsError) throw goalsError
-      setGoals(data || [])
-    } catch (err: any) {
-      setError(err.message || 'Failed to load approved goals.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [user])
-
-  const fetchCheckins = useCallback(async () => {
-    if (!user || goals.length === 0) return
-    try {
-      const goalIds = goals.map(g => g.id)
-      const { data } = await supabase
-        .from('goal_checkins')
-        .select('*')
-        .in('goal_id', goalIds)
-        .eq('quarter', selectedQuarter)
-
+      const { goals: fetchedGoals, checkins: fetchedCheckins } = await api.getMyCheckins(selectedQuarter)
+      setGoals(fetchedGoals || [])
+      
       const map: Record<string, Checkin> = {}
-      for (const c of (data || [])) {
+      for (const c of (fetchedCheckins || [])) {
         map[c.goal_id] = {
           id: c.id,
           goal_id: c.goal_id,
@@ -81,19 +59,21 @@ export default function CheckinsPage() {
           progress_status: c.progress_status || 'Not Started',
         }
       }
-      for (const goal of goals) {
+      for (const goal of (fetchedGoals || [])) {
         if (!map[goal.id]) {
           map[goal.id] = { goal_id: goal.id, quarter: selectedQuarter, actual_achievement: null, progress_status: 'Not Started' }
         }
       }
       setCheckins(map)
     } catch (err: any) {
-      console.error('Error fetching check-ins:', err)
+      console.error('Error fetching data:', err)
+      setError(err.message || 'Failed to load check-ins data.')
+    } finally {
+      setIsLoading(false)
     }
-  }, [user, goals, selectedQuarter])
+  }, [user, selectedQuarter])
 
-  useEffect(() => { fetchGoals() }, [fetchGoals])
-  useEffect(() => { fetchCheckins() }, [fetchCheckins])
+  useEffect(() => { fetchData() }, [fetchData])
 
   const updateCheckin = (goalId: string, field: keyof Checkin, value: any) => {
     setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], [field]: value } }))
@@ -111,15 +91,9 @@ export default function CheckinsPage() {
         actual_achievement: checkin.actual_achievement ?? 0,
         progress_status: checkin.progress_status,
       }
-      if (checkin.id) {
-        const { error: updateError } = await supabase.from('goal_checkins').update(payload).eq('id', checkin.id)
-        if (updateError) throw updateError
-      } else {
-        const { data: insertData, error: insertError } = await supabase
-          .from('goal_checkins').insert(payload).select('id').single()
-        if (insertError) throw insertError
-        setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], id: insertData.id } }))
-      }
+      const response = await api.submitCheckin(payload)
+      setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], id: response.checkin.id } }))
+      
       setSavedGoalIds(prev => new Set(prev).add(goalId))
       toast(`Successfully saved check-in for ${selectedQuarter}!`, 'success')
       setTimeout(() => setSavedGoalIds(prev => { const s = new Set(prev); s.delete(goalId); return s }), 3000)

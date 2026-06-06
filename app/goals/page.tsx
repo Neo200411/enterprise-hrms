@@ -7,7 +7,7 @@ import { AlertCircle, FileText, CheckCircle2, Download } from 'lucide-react'
 import { toCsv, downloadCsv } from '@/lib/export'
 import GoalForm from '@/components/goals/goal-form'
 import { useAuth } from '@/components/providers/auth-provider'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
 import { GoalSubmission } from '@/lib/validations/goal-schema'
 
 export default function GoalsPage() {
@@ -20,19 +20,16 @@ export default function GoalsPage() {
     setIsLoading(true)
     
     try {
-      const { data, error } = await supabase
-        .from('goals')
-        .select('*')
-        .eq('employee_id', user.id)
-
-      if (data && data.length > 0) {
-        // Find the overall status based on the first goal (assuming they are all submitted together)
-        const overallStatus = data[0].status
+      const response = await api.getGoals()
+      
+      if (response.submissions && response.submissions.length > 0) {
+        // Find the overall status based on the first submission
+        const currentSubmission = response.submissions[0]
         
         setSubmission({
-          period: 'Current Goals',
-          status: overallStatus as any,
-          goals: data.map((g: any) => ({
+          period: currentSubmission.period || 'Current Goals',
+          status: currentSubmission.status as any,
+          goals: currentSubmission.goals.map((g: any) => ({
             id: g.id,
             thrust_area: g.thrust_area,
             goal_title: g.goal_title,

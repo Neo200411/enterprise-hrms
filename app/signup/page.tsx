@@ -4,10 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Mail, Lock, User, Building2, Check } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
+import { useAuth } from '@/components/providers/auth-provider'
 
 export default function SignupPage() {
   const router = useRouter()
+  const { refreshSession } = useAuth()
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -51,15 +53,16 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const response = await api.register({
         email: formData.email,
         password: formData.password,
+        role: 'employee',
+        name: `${formData.firstName} ${formData.lastName}`
       })
 
-      if (authError) throw authError
-
-      localStorage.setItem('userRole', 'employee')
-      router.push('/')
+      localStorage.setItem('hr_token', response.token)
+      await refreshSession()
+      // AuthProvider handles redirect
     } catch (err: any) {
       setError(err.message || 'An error occurred during signup')
     } finally {

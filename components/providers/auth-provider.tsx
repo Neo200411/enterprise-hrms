@@ -1,69 +1,79 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
+import { api } from '@/services/api'
 
 type Role = 'employee' | 'manager' | 'admin' | null
 
+interface User {
+  id: string
+  email: string
+  name: string
+  role: Role
+}
+
 interface AuthContextType {
   user: User | null
-  session: Session | null
   role: Role
   isLoading: boolean
-  signOut: () => Promise<void>
+  signOut: () => void
+  refreshSession: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
-  session: null,
   role: null,
   isLoading: true,
-  signOut: async () => {},
+  signOut: () => {},
+  refreshSession: async () => {},
 })
 
 export const useAuth = () => useContext(AuthContext)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
   const [role, setRole] = useState<Role>(null)
   const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
+  const refreshSession = async () => {
+    setIsLoading(true)
+    try {
+      const token = localStorage.getItem('hr_token')
+      if (!token) {
+        throw new Error('No token found')
+      }
+      
+      const { user } = await api.getCurrentUser()
+      setUser(user)
+      setRole(user.role as Role)
+    } catch (error) {
+      console.error('Error getting session:', error)
+      setUser(null)
+      setRole(null)
+      localStorage.removeItem('hr_token')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   useEffect(() => {
-    // Get initial session
-    const getInitialSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        setSession(session)
-        setUser(session?.user ?? null)
-        setRole((session?.user?.user_metadata?.role as Role) ?? null)
-      } catch (error) {
-        console.error('Error getting session:', error)
-      } finally {
-        setIsLoading(false)
-      }
+    refreshSession()
+
+    const handleUnauthorized = () => {
+      setUser(null)
+      setRole(null)
+      setIsLoading(false)
+      router.replace('/login')
     }
 
-    getInitialSession()
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session)
-        setUser(session?.user ?? null)
-        setRole((session?.user?.user_metadata?.role as Role) ?? null)
-        setIsLoading(false)
-      }
-    )
-
+    window.addEventListener('auth-unauthorized', handleUnauthorized)
     return () => {
-      subscription.unsubscribe()
+      window.removeEventListener('auth-unauthorized', handleUnauthorized)
     }
-  }, [])
+  }, [router])
 
   // Route protection and redirection
   useEffect(() => {
@@ -93,13 +103,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, role, isLoading, pathname, router])
 
-  const signOut = async () => {
-    await supabase.auth.signOut()
+  const signOut = () => {
+    localStorage.removeItem('hr_token')
+    setUser(null)
+    setRole(null)
     router.replace('/login')
   }
 
   return (
-    <AuthContext.Provider value={{ user, session, role, isLoading, signOut }}>
+    <AuthContext.Provider value={{ user, role, isLoading, signOut, refreshSession }}>
       {children}
     </AuthContext.Provider>
   )

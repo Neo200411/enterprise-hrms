@@ -4,10 +4,12 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowRight, Mail, Lock } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
+import { useAuth } from '@/components/providers/auth-provider'
 
 export default function LoginPage() {
   const router = useRouter()
+  const { refreshSession } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -25,15 +27,10 @@ export default function LoginPage() {
     }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        setError(error.message)
-      }
-      // Note: Successful redirect is handled globally by the AuthProvider
+      const response = await api.login({ email, password })
+      localStorage.setItem('hr_token', response.token)
+      await refreshSession()
+      // AuthProvider will handle the redirect based on the role
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred')
     } finally {

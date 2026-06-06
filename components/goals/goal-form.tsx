@@ -7,7 +7,7 @@ import { goalSubmissionSchema, GoalSubmission } from '@/lib/validations/goal-sch
 import DashboardCard from '../dashboard/dashboard-card'
 import { useAuth } from '../providers/auth-provider'
 import { useToast } from '../providers/toast-provider'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/services/api'
 import { useState, useEffect } from 'react'
 
 interface GoalFormProps {
@@ -88,18 +88,8 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
     try {
       data.status = action
 
-      // Delete existing draft/rejected goals for this user to replace them
-      const { error: deleteError } = await supabase
-        .from('goals')
-        .delete()
-        .eq('employee_id', user.id)
-        .in('status', ['draft', 'rejected'])
-
-      if (deleteError) throw deleteError
-
-      // Insert new goals with dynamic safe mapping
-      const goalsToInsert = data.goals.map(goal => ({
-        employee_id: user.id,
+      // API handles deletion of draft/rejected goals and insertion of new goals atomically
+      const goalsPayload = data.goals.map(goal => ({
         thrust_area: goal.thrust_area || '',
         goal_title: goal.goal_title || '',
         description: goal.description || '',
@@ -107,14 +97,13 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
         measurement_type: goal.measurement_type || '',
         target_value: isNaN(Number(goal.target_value)) ? 0 : Number(goal.target_value),
         weightage: isNaN(Number(goal.weightage)) ? 0 : Number(goal.weightage),
-        status: data.status,
       }))
 
-      const { error: goalsError } = await supabase
-        .from('goals')
-        .insert(goalsToInsert)
-
-      if (goalsError) throw goalsError
+      await api.submitGoals({
+        period: data.period,
+        status: action,
+        goals: goalsPayload
+      })
 
       toast(
         action === 'draft'
@@ -206,7 +195,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     <option value="Learning">Learning & Growth</option>
                   </select>
                   {errors.goals?.[index]?.thrust_area && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.thrust_area?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.thrust_area?.message}</p>
                   )}
                 </div>
 
@@ -219,7 +208,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     placeholder="E.g., Increase sales by 20%"
                   />
                   {errors.goals?.[index]?.goal_title && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.goal_title?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.goal_title?.message}</p>
                   )}
                 </div>
               </div>
@@ -233,7 +222,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                   placeholder="Detail the expected outcome..."
                 />
                 {errors.goals?.[index]?.description && (
-                  <p className="text-destructive text-xs mt-1">{errors.goals[index]?.description?.message}</p>
+                  <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.description?.message}</p>
                 )}
               </div>
 
@@ -251,7 +240,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     <option value="Days">Days</option>
                   </select>
                   {errors.goals?.[index]?.uom_type && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.uom_type?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.uom_type?.message}</p>
                   )}
                 </div>
 
@@ -267,7 +256,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     <option value="Continuous">Continuous</option>
                   </select>
                   {errors.goals?.[index]?.measurement_type && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.measurement_type?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.measurement_type?.message}</p>
                   )}
                 </div>
 
@@ -280,7 +269,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     placeholder="0"
                   />
                   {errors.goals?.[index]?.target_value && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.target_value?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.target_value?.message}</p>
                   )}
                 </div>
 
@@ -294,7 +283,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
                     max={100}
                   />
                   {errors.goals?.[index]?.weightage && (
-                    <p className="text-destructive text-xs mt-1">{errors.goals[index]?.weightage?.message}</p>
+                    <p className="text-destructive text-xs mt-1">{errors.goals?.[index]?.weightage?.message}</p>
                   )}
                 </div>
               </div>
