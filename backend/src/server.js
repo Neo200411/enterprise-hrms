@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.routes.js';
+import goalRoutes from './routes/goal.routes.js';
+import approvalRoutes from './routes/approval.routes.js';
 
 dotenv.config();
 
@@ -12,6 +14,8 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth', authRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/approvals', approvalRoutes);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
