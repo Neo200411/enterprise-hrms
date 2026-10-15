@@ -5,8 +5,8 @@ import { authenticate, authorize } from '../middleware/auth.middleware.js';
 const router = Router();
 
 // Employee routes
-router.get('/my-checkins', authenticate, authorize(['employee', 'manager', 'admin']), getMyCheckins);
-router.post('/', authenticate, authorize(['employee', 'manager', 'admin']), submitCheckin);
+router.get('/my-checkins', authenticate, getMyCheckins);
+router.post('/', authenticate, submitCheckin);
 
 // Manager/Admin routes
 router.get('/team', authenticate, authorize(['manager', 'admin']), getTeamCheckins);

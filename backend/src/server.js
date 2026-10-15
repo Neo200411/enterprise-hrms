@@ -6,11 +6,7 @@ import authRoutes from './routes/auth.routes.js';
 import goalRoutes from './routes/goal.routes.js';
 import approvalRoutes from './routes/approval.routes.js';
 import checkinRoutes from './routes/checkin.routes.js';
-import analyticsRoutes from './routes/analytics.routes.js';
-import teamRoutes from './routes/team.routes.js';
-import settingsRoutes from './routes/settings.routes.js';
-import dashboardRoutes from './routes/dashboard.routes.js';
-import employeeRoutes from './routes/employee.routes.js';
+import reportRoutes from './routes/reports.routes.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('FATAL ERROR: JWT_SECRET must be set to a random string of at least 32 characters.');
@@ -34,11 +30,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/approvals', approvalRoutes);
 app.use('/api/checkins', checkinRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/team', teamRoutes);
-app.use('/api/settings', settingsRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/employees', employeeRoutes);
+app.use('/api/reports', reportRoutes);
 
 app.get('/health', async (req, res) => {
   try {

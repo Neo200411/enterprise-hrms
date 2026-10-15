@@ -1,186 +1,63 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
+// All calls to the Express backend go through here.
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'
 
-const getHeaders = () => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('hr_token') : null;
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
-};
+// Sends a request with the saved login token and returns the JSON body (or throws the API's error message)
+async function request(path: string, options: { method?: string; body?: unknown } = {}) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('hr_token') : null
 
-const handleResponse = async (response: Response) => {
-  if (response.status === 401) {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('hr_token');
-      window.dispatchEvent(new Event('auth-unauthorized'));
-    }
+  const response = await fetch(`${API_URL}${path}`, {
+    method: options.method || 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+  })
+
+  // Token missing or expired: clear it and let the AuthProvider send the user to /login
+  if (response.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('hr_token')
+    window.dispatchEvent(new Event('auth-unauthorized'))
   }
-  
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    const errorData = await response.json().catch(() => ({}))
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
   }
-  
-  return response.json();
-};
+
+  return response.json()
+}
 
 export const api = {
   // --- Auth ---
-  login: async (credentials: any) => {
-    const res = await fetch(`${API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(credentials)
-    });
-    return handleResponse(res);
-  },
-  
-  register: async (data: any) => {
-    const res = await fetch(`${API_URL}/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return handleResponse(res);
-  },
+  login: (credentials: { email: string; password: string }) =>
+    request('/auth/login', { method: 'POST', body: credentials }),
+  register: (data: { email: string; password: string; name: string }) =>
+    request('/auth/register', { method: 'POST', body: data }),
+  getCurrentUser: () => request('/auth/me'),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    request('/auth/password', { method: 'PUT', body: data }),
 
-  getCurrentUser: async () => {
-    const res = await fetch(`${API_URL}/auth/me`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
+  // --- Goals (employee) ---
+  getGoals: () => request('/goals'),
+  submitGoals: (data: unknown) => request('/goals/submit', { method: 'POST', body: data }),
 
-  changePassword: async (data: { currentPassword: string; newPassword: string }) => {
-    const res = await fetch(`${API_URL}/auth/password`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(data)
-    });
-    return handleResponse(res);
-  },
+  // --- Approvals (manager) ---
+  getPendingApprovals: () => request('/approvals/pending'),
+  updateSubmissionStatus: (submissionId: string, actionData: unknown) =>
+    request(`/approvals/submissions/${submissionId}/action`, { method: 'PUT', body: actionData }),
 
-  // --- Goals (Employee) ---
-  getGoals: async () => {
-    const res = await fetch(`${API_URL}/goals`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
+  // --- Quarterly check-ins ---
+  getMyCheckins: (quarter: string) => request(`/checkins/my-checkins?quarter=${quarter}`),
+  submitCheckin: (data: unknown) => request('/checkins', { method: 'POST', body: data }),
+  getTeamCheckins: (quarter: string) => request(`/checkins/team?quarter=${quarter}`),
 
-  submitGoals: async (data: any) => {
-    const res = await fetch(`${API_URL}/goals/submit`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(data)
-    });
-    return handleResponse(res);
-  },
-
-  // --- Approvals (Manager) ---
-  getPendingApprovals: async () => {
-    const res = await fetch(`${API_URL}/approvals/pending`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  updateSubmissionStatus: async (submissionId: string, actionData: any) => {
-    const res = await fetch(`${API_URL}/approvals/submissions/${submissionId}/action`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(actionData)
-    });
-    return handleResponse(res);
-  },
-
-  // --- Check-ins (Employee & Manager) ---
-  getMyCheckins: async (quarter: string) => {
-    const res = await fetch(`${API_URL}/checkins/my-checkins?quarter=${quarter}`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  submitCheckin: async (data: any) => {
-    const res = await fetch(`${API_URL}/checkins`, {
-      method: 'POST',
-      headers: getHeaders(),
-      body: JSON.stringify(data)
-    });
-    return handleResponse(res);
-  },
-
-  getTeamCheckins: async (quarter: string) => {
-    const res = await fetch(`${API_URL}/checkins/team?quarter=${quarter}`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  getTeamMembers: async (page: number = 1, limit: number = 10) => {
-    const res = await fetch(`${API_URL}/team?page=${page}&limit=${limit}`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  getManagerDashboard: async () => {
-    const res = await fetch(`${API_URL}/analytics/manager-dashboard`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  getEmployeeDashboard: async () => {
-    const res = await fetch(`${API_URL}/dashboard/employee`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  // --- Analytics (Admin) ---
-  getAnalyticsDashboard: async () => {
-    const res = await fetch(`${API_URL}/analytics/dashboard`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  getEmployees: async () => {
-    const res = await fetch(`${API_URL}/employees`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  getAuditLogs: async (limit: number = 100) => {
-    const res = await fetch(`${API_URL}/analytics/logs?limit=${limit}`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  exportAnalytics: async () => {
-    const res = await fetch(`${API_URL}/analytics/export`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-  // --- Settings ---
-  getUserSettings: async () => {
-    const res = await fetch(`${API_URL}/settings`, {
-      headers: getHeaders()
-    });
-    return handleResponse(res);
-  },
-
-  updateUserSettings: async (settings: any) => {
-    const res = await fetch(`${API_URL}/settings`, {
-      method: 'PUT',
-      headers: getHeaders(),
-      body: JSON.stringify(settings)
-    });
-    return handleResponse(res);
-  }
-};
+  // --- Reports & dashboards ---
+  getEmployeeDashboard: () => request('/reports/employee-dashboard'),
+  getManagerDashboard: () => request('/reports/manager-dashboard'),
+  getTeamMembers: (page = 1, limit = 10) => request(`/reports/team?page=${page}&limit=${limit}`),
+  getAnalyticsDashboard: () => request('/reports/admin-dashboard'),
+  getEmployees: () => request('/reports/employees'),
+  exportAnalytics: () => request('/reports/export'),
+  getAuditLogs: (limit = 100) => request(`/reports/audit-logs?limit=${limit}`),
+}

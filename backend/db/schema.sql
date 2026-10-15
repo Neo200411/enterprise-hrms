@@ -1,4 +1,11 @@
--- PrimeHR database schema. Safe to re-run: every statement is idempotent.
+-- PrimeHR database schema: 5 tables. Safe to re-run: every statement is idempotent.
+--
+-- How the tables relate (1 → many):
+--   users            → goal_submissions   an employee submits one set of goals per period
+--   goal_submissions → goals              each submission holds 1–8 goals (weightage totals 100%)
+--   goal_submissions → approvals          each manager decision (approve / return for rework)
+--   goals            → goal_checkins      one check-in per goal per quarter
+--   users            → approvals          the manager who made the decision
 -- Apply with: npm run db:setup   (from the backend/ folder)
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -57,14 +64,4 @@ CREATE TABLE IF NOT EXISTS public.goal_checkins (
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (goal_id, quarter)
-);
-
-CREATE TABLE IF NOT EXISTS public.user_settings (
-  user_id                UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
-  goal_updates           BOOLEAN DEFAULT true,
-  approval_notifications BOOLEAN DEFAULT true,
-  weekly_summary         BOOLEAN DEFAULT false,
-  profile_visibility     TEXT DEFAULT 'public',
-  created_at             TIMESTAMPTZ DEFAULT NOW(),
-  updated_at             TIMESTAMPTZ DEFAULT NOW()
 );
