@@ -1,7 +1,8 @@
 'use client'
 
-import { Bell, ChevronDown } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDown } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../providers/auth-provider'
 
 interface HeaderProps {
@@ -12,6 +13,17 @@ interface HeaderProps {
 export default function Header({ userName, userRole }: HeaderProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const { logout } = useAuth()
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  // Close the menu when clicking anywhere outside it
+  useEffect(() => {
+    if (!isDropdownOpen) return
+    const handleClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setIsDropdownOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [isDropdownOpen])
 
   const getRoleLabel = () => {
     const roles: Record<string, string> = {
@@ -31,14 +43,8 @@ export default function Header({ userName, userRole }: HeaderProps) {
 
       {/* Right side - notifications and user menu */}
       <div className="flex items-center gap-4">
-        {/* Notifications */}
-        <button className="relative p-2 rounded-lg hover:bg-secondary transition-colors duration-200">
-          <Bell className="w-5 h-5 text-foreground" />
-          <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
-
         {/* User menu */}
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
             onClick={() => setIsDropdownOpen(!isDropdownOpen)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-secondary transition-colors duration-200"
@@ -48,7 +54,7 @@ export default function Header({ userName, userRole }: HeaderProps) {
               <p className="text-xs text-muted-foreground">{getRoleLabel()}</p>
             </div>
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center font-bold text-primary-foreground text-sm">
-              {userName.charAt(0)}
+              {userName.charAt(0).toUpperCase()}
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground" />
           </button>
@@ -57,12 +63,13 @@ export default function Header({ userName, userRole }: HeaderProps) {
           {isDropdownOpen && (
             <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-lg shadow-lg z-50">
               <div className="p-2 space-y-1">
-                <button className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors">
-                  Profile
-                </button>
-                <button className="w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors">
+                <Link
+                  href="/settings"
+                  onClick={() => setIsDropdownOpen(false)}
+                  className="block w-full text-left px-3 py-2 text-sm rounded hover:bg-secondary transition-colors"
+                >
                   Settings
-                </button>
+                </Link>
                 <hr className="my-1 border-border" />
                 <button 
                   onClick={() => logout()}

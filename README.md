@@ -129,6 +129,12 @@ JWT_SECRET=your_jwt_secret
 PORT=5001
 ```
 
+`JWT_SECRET` must be a random string of at least 32 characters — the server refuses to start otherwise. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
+```
+
 ### Set Up the Database
 
 Creates all tables (`backend/db/schema.sql`) and the demo accounts below. Safe to re-run.

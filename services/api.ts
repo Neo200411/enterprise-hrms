@@ -51,6 +51,15 @@ export const api = {
     return handleResponse(res);
   },
 
+  changePassword: async (data: { currentPassword: string; newPassword: string }) => {
+    const res = await fetch(`${API_URL}/auth/password`, {
+      method: 'PUT',
+      headers: getHeaders(),
+      body: JSON.stringify(data)
+    });
+    return handleResponse(res);
+  },
+
   // --- Goals (Employee) ---
   getGoals: async () => {
     const res = await fetch(`${API_URL}/goals`, {

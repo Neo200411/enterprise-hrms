@@ -1,5 +1,7 @@
 import { query, pool } from '../config/db.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Get all pending submissions with employee details and nested goals
 export const getPendingApprovals = async (req, res) => {
   try {
@@ -44,6 +46,13 @@ export const getPendingApprovals = async (req, res) => {
 
 // Approve or reject a submission
 export const updateSubmissionStatus = async (req, res) => {
+  if (!UUID_RE.test(req.params.submissionId)) {
+    return res.status(404).json({ error: 'Submission not found.' });
+  }
+  if (Array.isArray(req.body.goals) && req.body.goals.some(g => g.id && !UUID_RE.test(g.id))) {
+    return res.status(400).json({ error: 'Invalid goal ID.' });
+  }
+
   const client = await pool.connect();
   let inTransaction = false;
 
@@ -54,6 +63,21 @@ export const updateSubmissionStatus = async (req, res) => {
 
     if (!action || !['approved', 'rejected'].includes(action)) {
       return res.status(400).json({ error: 'Invalid action. Must be approved or rejected.' });
+    }
+
+    if (action === 'rejected' && !remarks?.trim()) {
+      return res.status(400).json({ error: 'Please add remarks explaining what needs to be reworked.' });
+    }
+
+    if (Array.isArray(goals)) {
+      for (const g of goals) {
+        if (g.target_value !== undefined && !(Number(g.target_value) > 0)) {
+          return res.status(400).json({ error: 'Target values must be greater than 0.' });
+        }
+        if (g.weightage !== undefined && !(Number(g.weightage) >= 10)) {
+          return res.status(400).json({ error: 'Each goal must have at least 10% weightage.' });
+        }
+      }
     }
 
     // 1. Verify submission exists and is pending
@@ -108,9 +132,23 @@ export const updateSubmissionStatus = async (req, res) => {
         if (editedGoal.id && (editedGoal.target_value !== undefined || editedGoal.weightage !== undefined)) {
           await client.query(
             'UPDATE public.goals SET target_value = COALESCE($1, target_value), weightage = COALESCE($2, weightage) WHERE id = $3 AND submission_id = $4',
-            [editedGoal.target_value, editedGoal.weightage, editedGoal.id, submissionId]
+            [editedGoal.target_value ?? null, editedGoal.weightage ?? null, editedGoal.id, submissionId]
           );
         }
+      }
+    }
+
+    // Manager edits must still add up to 100% before goals can be approved
+    if (action === 'approved') {
+      const totals = await client.query(
+        'SELECT COALESCE(SUM(weightage), 0) AS total FROM public.goals WHERE submission_id = $1',
+        [submissionId]
+      );
+      const total = Number(totals.rows[0].total);
+      if (total !== 100) {
+        await client.query('ROLLBACK');
+        inTransaction = false;
+        return res.status(400).json({ error: `Total weightage must equal 100% to approve. Current total: ${total}%` });
       }
     }
 

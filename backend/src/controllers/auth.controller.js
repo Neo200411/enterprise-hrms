@@ -2,12 +2,13 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { query } from '../config/db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET;
 const SALT_ROUNDS = 10;
 
 export const register = async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const name = String(req.body.name || '').trim();
     // Self-registration always creates an employee. Managers/admins are promoted
     // in the database by an admin, never chosen by the client.
     const role = 'employee';
@@ -16,12 +17,16 @@ export const register = async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (password.length < 8) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+
+    if (typeof password !== 'string' || password.length < 8) {
       return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     // Check if user already exists
-    const existingUser = await query('SELECT id FROM public.users WHERE email = $1', [email]);
+    const existingUser = await query('SELECT id FROM public.users WHERE LOWER(email) = $1', [email]);
     if (existingUser.rows.length > 0) {
       return res.status(409).json({ error: 'User already exists with this email' });
     }
@@ -41,12 +46,15 @@ export const register = async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     res.status(201).json({ user, token });
   } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'User already exists with this email' });
+    }
     console.error('Register error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -54,14 +62,15 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { password } = req.body;
+    const email = String(req.body.email || '').trim().toLowerCase();
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
     // Find user
-    const result = await query('SELECT * FROM public.users WHERE email = $1', [email]);
+    const result = await query('SELECT * FROM public.users WHERE LOWER(email) = $1', [email]);
     const user = result.rows[0];
 
     if (!user || !user.password_hash) {
@@ -77,7 +86,7 @@ export const login = async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
+      process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -108,6 +117,35 @@ export const getMe = async (req, res) => {
     res.json({ user: result.rows[0] });
   } catch (error) {
     console.error('Get me error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current and new password are required' });
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters' });
+    }
+
+    const result = await query('SELECT password_hash FROM public.users WHERE id = $1', [req.user.id]);
+    const user = result.rows[0];
+
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) {
+      return res.status(400).json({ error: 'Current password is incorrect' });
+    }
+
+    const password_hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    await query('UPDATE public.users SET password_hash = $1 WHERE id = $2', [password_hash, req.user.id]);
+
+    res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Change password error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

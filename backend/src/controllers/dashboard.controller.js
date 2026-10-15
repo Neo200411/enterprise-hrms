@@ -39,6 +39,7 @@ export const getEmployeeDashboard = async (req, res) => {
           g.goal_title as goal_title,
           gc.quarter,
           gc.actual_achievement,
+          LEAST(ROUND(COALESCE(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 0)), 100)::int as achievement_pct,
           CASE 
             WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
             WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'In Progress'

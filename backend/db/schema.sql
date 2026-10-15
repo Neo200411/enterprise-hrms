@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   role          TEXT NOT NULL DEFAULT 'employee' CHECK (role IN ('employee', 'manager', 'admin')),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Emails are compared case-insensitively at login/sign-up
+CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_idx ON public.users (LOWER(email));
 
 CREATE TABLE IF NOT EXISTS public.goal_submissions (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),

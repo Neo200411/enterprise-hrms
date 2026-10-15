@@ -1,7 +1,10 @@
 import 'dotenv/config';
 import pg from 'pg';
 
-const { Pool } = pg;
+const { Pool, types } = pg;
+
+// Return NUMERIC columns (target_value, weightage, actual_achievement) as JS numbers, not strings
+types.setTypeParser(types.builtins.NUMERIC, (value) => (value === null ? null : parseFloat(value)));
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,

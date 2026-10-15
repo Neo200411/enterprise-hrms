@@ -90,6 +90,11 @@ export default function ApprovalsPage() {
     }
   }, [submissions])
 
+  const reviewedTotal = (selectedSubmission?.goals || []).reduce(
+    (sum, g) => sum + Number(editedGoals[g.id]?.weightage ?? g.weightage ?? 0),
+    0
+  )
+
   const handleAction = async (action: 'approved' | 'rejected') => {
     if (!selectedSubmission) return
     setIsSaving(true)
@@ -123,6 +128,7 @@ export default function ApprovalsPage() {
     } catch (err: any) {
       console.error(`Error performing ${action}:`, err)
       setError(err.message || `Failed to ${action} goals`)
+      toast(err.message || `Failed to ${action} goals`, 'error')
     } finally {
       setIsSaving(false)
     }
@@ -333,11 +339,21 @@ export default function ApprovalsPage() {
                   })}
                 </div>
 
+                {/* Weightage total after any manager edits */}
+                {selectedSubmission.status === 'pending_approval' && (
+                  <div className={`flex items-center justify-between p-3 rounded-lg text-sm font-medium ${
+                    reviewedTotal === 100 ? 'bg-status-success/10 text-status-success' : 'bg-destructive/10 text-destructive'
+                  }`}>
+                    <span>Total Weightage</span>
+                    <span>{reviewedTotal}%{reviewedTotal !== 100 && ' — must equal 100% to approve'}</span>
+                  </div>
+                )}
+
                 {/* Feedback */}
                 {selectedSubmission.status === 'pending_approval' && (
                   <div>
                     <label className="block text-sm font-medium text-foreground mb-2">
-                      Add Manager Feedback (Optional)
+                      Manager Feedback <span className="text-muted-foreground font-normal">(required to return for rework)</span>
                     </label>
                     <textarea
                       value={feedbackText}
@@ -374,7 +390,7 @@ export default function ApprovalsPage() {
                   <div className="flex gap-4 pt-4 border-t border-border">
                     <button
                       onClick={() => handleAction('approved')}
-                      disabled={isSaving}
+                      disabled={isSaving || reviewedTotal !== 100}
                       className="flex-1 px-4 py-2 bg-status-success text-white font-semibold rounded-lg hover:bg-status-success/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {isSaving ? 'Processing...' : (
@@ -385,7 +401,7 @@ export default function ApprovalsPage() {
                     </button>
                     <button
                       onClick={() => handleAction('rejected')}
-                      disabled={isSaving}
+                      disabled={isSaving || !feedbackText.trim()}
                       className="flex-1 px-4 py-2 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {isSaving ? 'Processing...' : (

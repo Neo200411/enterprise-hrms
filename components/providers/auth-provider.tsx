@@ -31,6 +31,31 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext)
 
+// Pages restricted to certain roles (matched by path prefix). Everything else is open to any signed-in user.
+const ROUTE_ROLES: { prefix: string; roles: Role[] }[] = [
+  { prefix: '/admin', roles: ['admin'] },
+  { prefix: '/approvals', roles: ['manager', 'admin'] },
+  { prefix: '/team', roles: ['manager', 'admin'] },
+  { prefix: '/checkins-review', roles: ['manager', 'admin'] },
+  { prefix: '/dashboard-manager', roles: ['manager', 'admin'] },
+]
+
+const homeForRole = (role: Role) => {
+  switch (role) {
+    case 'admin':
+      return '/admin/analytics'
+    case 'manager':
+      return '/dashboard-manager'
+    default:
+      return '/'
+  }
+}
+
+export const canAccess = (pathname: string, role: Role) => {
+  const rule = ROUTE_ROLES.find(r => pathname === r.prefix || pathname.startsWith(`${r.prefix}/`))
+  return !rule || rule.roles.includes(role)
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [role, setRole] = useState<Role>(null)
@@ -96,17 +121,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (user && isAuthRoute) {
       // Redirect authenticated users away from auth routes based on role
-      switch (role) {
-        case 'admin':
-          router.replace('/admin/analytics')
-          break
-        case 'manager':
-          router.replace('/dashboard-manager')
-          break
-        default:
-          router.replace('/')
-          break
-      }
+      router.replace(homeForRole(role))
+      return
+    }
+
+    if (user && !canAccess(pathname, role)) {
+      // Signed in, but this page belongs to another role
+      router.replace(homeForRole(role))
     }
   }, [user, role, isLoading, pathname, router])
 

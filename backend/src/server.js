@@ -12,12 +12,14 @@ import settingsRoutes from './routes/settings.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import employeeRoutes from './routes/employee.routes.js';
 
-if (!process.env.JWT_SECRET) {
-  console.error('FATAL ERROR: JWT_SECRET environment variable is not defined.');
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL ERROR: JWT_SECRET must be set to a random string of at least 32 characters.');
+  console.error("Generate one with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\"");
   process.exit(1);
 }
 
 const app = express();
+app.set('trust proxy', 1); // so req.ip is the real client IP behind a proxy (used for rate limiting)
 const port = process.env.PORT || 5001;
 
 app.use(
@@ -45,6 +47,22 @@ app.get('/health', async (req, res) => {
   } catch (error) {
     res.status(503).json({ status: 'error', database: 'unreachable', detail: error.message });
   }
+});
+
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Central error handler: malformed JSON, invalid IDs, and anything a controller passed to next()
+app.use((err, req, res, next) => {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Request body must be valid JSON' });
+  }
+  if (err.code === '22P02') {
+    return res.status(400).json({ error: 'Invalid ID or value format' });
+  }
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 app.listen(port, async () => {

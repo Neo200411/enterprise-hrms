@@ -2,8 +2,8 @@
 
 import Sidebar from './sidebar'
 import Header from './header'
-import { useState } from 'react'
-import { useAuth } from '../providers/auth-provider'
+import { usePathname } from 'next/navigation'
+import { canAccess, useAuth } from '../providers/auth-provider'
 
 interface AppLayoutProps {
   children: React.ReactNode
@@ -15,8 +15,10 @@ export default function AppLayout({
   children,
 }: AppLayoutProps) {
   const { user, role, isLoading } = useAuth()
+  const pathname = usePathname()
 
-  if (isLoading) {
+  // Don't flash a page the user is about to be redirected away from
+  if (isLoading || !user || !canAccess(pathname, role)) {
     return <div className="flex h-screen bg-background items-center justify-center">Loading...</div>
   }
 

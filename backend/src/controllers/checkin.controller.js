@@ -1,5 +1,8 @@
 import { query } from '../config/db.js';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PROGRESS_STATUSES = ['Not Started', 'On Track', 'In Progress', 'Blocked', 'Completed'];
+
 // Employee: Get approved goals and their check-ins for a quarter
 export const getMyCheckins = async (req, res) => {
   try {
@@ -57,6 +60,18 @@ export const submitCheckin = async (req, res) => {
     const ALLOWED_QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'];
     if (!ALLOWED_QUARTERS.includes(quarter)) {
       return res.status(400).json({ error: 'Quarter must be one of Q1, Q2, Q3, Q4' });
+    }
+
+    if (!UUID_RE.test(goal_id)) {
+      return res.status(400).json({ error: 'Invalid goal ID' });
+    }
+
+    if (!PROGRESS_STATUSES.includes(progress_status)) {
+      return res.status(400).json({ error: `Progress status must be one of: ${PROGRESS_STATUSES.join(', ')}` });
+    }
+
+    if (actual_achievement != null && !(Number(actual_achievement) >= 0)) {
+      return res.status(400).json({ error: 'Actual achievement must be a number of 0 or more' });
     }
 
     // 1. Strict Validation: Ensure the goal belongs to the user AND the parent submission is 'approved'

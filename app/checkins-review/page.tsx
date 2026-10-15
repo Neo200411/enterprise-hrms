@@ -228,7 +228,7 @@ export default function CheckinsReviewPage() {
                             <div className="flex items-center gap-2 mb-1">
                               <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">{goal.thrust_area}</span>
                               {checkin ? (
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${checkin.progress_status === 'Completed' ? 'bg-green-100 text-green-700' : checkin.progress_status === 'On Track' ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${checkin.progress_status === 'Completed' ? 'bg-green-100 text-green-700' : checkin.progress_status === 'On Track' ? 'bg-blue-50 text-blue-600' : checkin.progress_status === 'Blocked' ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
                                   {checkin.progress_status}
                                 </span>
                               ) : (

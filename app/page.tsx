@@ -14,6 +14,7 @@ interface Checkin {
   goal_title: string
   quarter: string
   actual_achievement: number
+  achievement_pct: number
   progress_status: string
   created_at: string
 }
@@ -147,7 +148,7 @@ export default function Home() {
                         <div className="flex-1">
                           <p className="font-medium text-foreground">{checkin.goal_title}</p>
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            Achievement: {checkin.actual_achievement}%
+                            Achievement: {checkin.achievement_pct}% of target
                           </p>
                         </div>
                         <div className="text-right">

@@ -30,6 +30,38 @@ export default function SettingsPage() {
 
   const [privacy, setPrivacy] = useState('public')
 
+  // Change password form
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+  const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' })
+  const [passwordStatus, setPasswordStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordStatus(null)
+
+    if (passwords.next.length < 8) {
+      setPasswordStatus({ type: 'error', message: 'New password must be at least 8 characters' })
+      return
+    }
+    if (passwords.next !== passwords.confirm) {
+      setPasswordStatus({ type: 'error', message: 'New passwords do not match' })
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      await api.changePassword({ currentPassword: passwords.current, newPassword: passwords.next })
+      setPasswords({ current: '', next: '', confirm: '' })
+      setShowPasswordForm(false)
+      setPasswordStatus({ type: 'success', message: 'Password updated successfully' })
+    } catch (err: any) {
+      setPasswordStatus({ type: 'error', message: err.message || 'Failed to update password' })
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
   useEffect(() => {
     // Sync authenticated user profile data
     if (user) {
@@ -42,25 +74,26 @@ export default function SettingsPage() {
     }
   }, [user])
 
-  useEffect(() => {
-    // Fetch user settings from backend
-    const fetchSettings = async () => {
-      try {
-        setIsLoading(true)
-        const data = await api.getUserSettings()
-        setNotifications({
-          goalUpdates: data.goalUpdates ?? true,
-          approvalNotifications: data.approvalNotifications ?? true,
-          weeklySummary: data.weeklySummary ?? false,
-        })
-        setPrivacy(data.profileVisibility ?? 'public')
-      } catch (error) {
-        console.error('Failed to load settings:', error)
-        setErrorMessage('Failed to load settings. Please refresh and try again.')
-      } finally {
-        setIsLoading(false)
-      }
+  // Fetch user settings from backend (also used by Cancel to discard unsaved changes)
+  const fetchSettings = async () => {
+    try {
+      setIsLoading(true)
+      const data = await api.getUserSettings()
+      setNotifications({
+        goalUpdates: data.goalUpdates ?? true,
+        approvalNotifications: data.approvalNotifications ?? true,
+        weeklySummary: data.weeklySummary ?? false,
+      })
+      setPrivacy(data.profileVisibility ?? 'public')
+    } catch (error) {
+      console.error('Failed to load settings:', error)
+      setErrorMessage('Failed to load settings. Please refresh and try again.')
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchSettings()
   }, [])
 
@@ -292,17 +325,68 @@ export default function SettingsPage() {
                       </div>
                     </div>
 
-                    <div className="p-4 rounded-lg bg-secondary/50 border border-border flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Lock className="w-5 h-5 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium text-foreground text-sm">Password & Authentication</p>
-                          <p className="text-xs text-muted-foreground">Update your password or enable 2FA</p>
+                    <div className="p-4 rounded-lg bg-secondary/50 border border-border space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Lock className="w-5 h-5 text-muted-foreground" />
+                          <div>
+                            <p className="font-medium text-foreground text-sm">Password</p>
+                            <p className="text-xs text-muted-foreground">Change the password you use to sign in</p>
+                          </div>
                         </div>
+                        {!showPasswordForm && (
+                          <button
+                            type="button"
+                            onClick={() => { setShowPasswordForm(true); setPasswordStatus(null) }}
+                            className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors"
+                          >
+                            Change Password
+                          </button>
+                        )}
                       </div>
-                      <button className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-50">
-                        Manage
-                      </button>
+
+                      {showPasswordForm && (
+                        <form onSubmit={handleChangePassword} className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {([
+                            ['current', 'Current password', 'current-password'],
+                            ['next', 'New password', 'new-password'],
+                            ['confirm', 'Confirm new password', 'new-password'],
+                          ] as const).map(([key, label, autoComplete]) => (
+                            <div key={key}>
+                              <label className="block text-xs font-medium text-foreground mb-1">{label}</label>
+                              <input
+                                type="password"
+                                autoComplete={autoComplete}
+                                value={passwords[key]}
+                                onChange={(e) => setPasswords(prev => ({ ...prev, [key]: e.target.value }))}
+                                className="w-full px-3 py-2 border border-border rounded-lg bg-input focus:outline-none focus:ring-2 focus:ring-primary text-foreground text-sm"
+                              />
+                            </div>
+                          ))}
+                          <div className="md:col-span-3 flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => { setShowPasswordForm(false); setPasswords({ current: '', next: '', confirm: '' }); setPasswordStatus(null) }}
+                              className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={isChangingPassword || !passwords.current || !passwords.next}
+                              className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                            >
+                              {isChangingPassword ? 'Updating...' : 'Update Password'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {passwordStatus && (
+                        <p className={`text-sm ${passwordStatus.type === 'error' ? 'text-destructive' : 'text-status-success'}`}>
+                          {passwordStatus.message}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -316,9 +400,15 @@ export default function SettingsPage() {
 
                 {/* Action Buttons */}
                 <div className="flex justify-end gap-3 pt-6 border-t border-border mt-8">
-                  <button className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-50">
-                    Cancel
-                  </button>
+                  {activeTab !== 'profile' && (
+                    <button
+                      onClick={fetchSettings}
+                      disabled={saveStatus === 'saving' || isLoading}
+                      className="px-4 py-2 text-sm font-medium text-foreground border border-border rounded-lg hover:bg-secondary transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                  )}
                   {activeTab !== 'profile' && (
                     <button
                       onClick={handleSave}
