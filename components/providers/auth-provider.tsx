@@ -18,7 +18,7 @@ interface AuthContextType {
   role: Role
   isLoading: boolean
   logout: () => void
-  refreshSession: () => Promise<void>
+  refreshSession: (options?: { silent?: boolean }) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -62,33 +62,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
 
-  const refreshSession = async () => {
-  setIsLoading(true)
+  // silent: re-read the user (e.g. after a name change) without showing the full-page loading state
+  const refreshSession = async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setIsLoading(true)
 
-  try {
-    const token = localStorage.getItem('hr_token')
+    try {
+      const token = localStorage.getItem('hr_token')
 
-    // User is not logged in yet
-    if (!token) {
+      // User is not logged in yet
+      if (!token) {
+        setUser(null)
+        setRole(null)
+        return
+      }
+
+      const { user } = await api.getCurrentUser()
+
+      setUser(user)
+      setRole(user.role as Role)
+    } catch (error) {
+      console.error('Error getting session:', error)
+
       setUser(null)
       setRole(null)
-      return
+      localStorage.removeItem('hr_token')
+    } finally {
+      setIsLoading(false)
     }
-
-    const { user } = await api.getCurrentUser()
-
-    setUser(user)
-    setRole(user.role as Role)
-  } catch (error) {
-    console.error('Error getting session:', error)
-
-    setUser(null)
-    setRole(null)
-    localStorage.removeItem('hr_token')
-  } finally {
-    setIsLoading(false)
   }
-}
 
   useEffect(() => {
     refreshSession()

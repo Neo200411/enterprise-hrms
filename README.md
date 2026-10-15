@@ -4,7 +4,7 @@ A full-stack HRMS for **goal management and quarterly performance tracking**, wi
 
 - **Employees** plan goals for a quarter, submit them for approval, and record quarterly check-ins.
 - **Managers** review submissions, adjust targets/weightage, approve or return them for rework, and track team progress.
-- **Admins** see organisation-wide analytics, the audit log, and export reports to CSV.
+- **Admins** see organisation-wide analytics, the audit log, manage people's names, and export reports to CSV.
 
 How it works end to end — tables, workflows, API — is in **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -32,7 +32,7 @@ backend/
   db/schema.sql       The 5 tables
   db/setup.js         Creates tables + demo users
   src/server.js       Express app
-  src/routes/         auth · goals · approvals · checkins · reports
+  src/routes/         auth · goals · approvals · checkins · reports · users
   src/controllers/    Business logic + SQL for each route group
   src/middleware/     JWT auth, role checks, rate limiting
 ```

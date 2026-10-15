@@ -8,13 +8,13 @@ export const register = async (req, res) => {
   try {
     const { password } = req.body;
     const email = String(req.body.email || '').trim().toLowerCase();
-    const name = String(req.body.name || '').trim();
+    const { name, error: nameError } = cleanName(req.body.name);
     // Self-registration always creates an employee. Managers/admins are promoted
     // in the database by an admin, never chosen by the client.
     const role = 'employee';
 
     if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: nameError || 'Missing required fields' });
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -146,6 +146,31 @@ export const changePassword = async (req, res) => {
     res.json({ message: 'Password updated successfully' });
   } catch (error) {
     console.error('Change password error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// Shared rule for names, used here and by the admin People page
+export const cleanName = (value) => {
+  const name = String(value ?? '').trim().replace(/\s+/g, ' ');
+  if (!name) return { error: 'Name is required' };
+  if (name.length > 100) return { error: 'Name must be 100 characters or fewer' };
+  return { name };
+};
+
+// Any signed-in user can change their own display name
+export const updateMyName = async (req, res) => {
+  try {
+    const { name, error } = cleanName(req.body.name);
+    if (error) return res.status(400).json({ error });
+
+    const result = await query(
+      'UPDATE public.users SET name = $1 WHERE id = $2 RETURNING id, email, role, name',
+      [name, req.user.id]
+    );
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error('Update name error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

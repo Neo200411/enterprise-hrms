@@ -2,8 +2,8 @@
 
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
-import { useState } from 'react'
-import { Lock } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Lock, Save } from 'lucide-react'
 import { useAuth } from '@/components/providers/auth-provider'
 import { api } from '@/services/api'
 
@@ -16,7 +16,28 @@ const ROLE_LABELS: Record<string, string> = {
 const EMPTY_PASSWORDS = { current: '', next: '', confirm: '' }
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
+
+  // Editable display name
+  const [name, setName] = useState(user?.name || '')
+  const [nameStatus, setNameStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
+  const [isSavingName, setIsSavingName] = useState(false)
+  useEffect(() => { setName(user?.name || '') }, [user?.name])
+
+  const handleSaveName = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setNameStatus(null)
+    setIsSavingName(true)
+    try {
+      await api.updateMyName(name)
+      await refreshSession({ silent: true }) // so the header shows the new name
+      setNameStatus({ type: 'success', message: 'Name updated' })
+    } catch (err: any) {
+      setNameStatus({ type: 'error', message: err.message || 'Failed to update name' })
+    } finally {
+      setIsSavingName(false)
+    }
+  }
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
   const [isSaving, setIsSaving] = useState(false)
@@ -68,17 +89,30 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={handleSaveName} className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Full Name</label>
-              <input type="text" disabled value={user?.name || ''} className={inputClass} />
+              <div className="flex gap-2">
+                <input type="text" value={name} maxLength={100} onChange={(e) => setName(e.target.value)} className={inputClass} />
+                <button
+                  type="submit"
+                  disabled={isSavingName || !name.trim() || name.trim() === user?.name}
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingName ? 'Saving...' : 'Save'}
+                </button>
+              </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">Email</label>
               <input type="email" disabled value={user?.email || ''} className={inputClass} />
             </div>
-          </div>
-          <p className="text-xs text-muted-foreground mt-3">Contact an administrator to change your name, email or role.</p>
+          </form>
+          {nameStatus && (
+            <p className={`text-sm mt-3 ${nameStatus.type === 'error' ? 'text-destructive' : 'text-status-success'}`}>{nameStatus.message}</p>
+          )}
+          <p className="text-xs text-muted-foreground mt-3">To change your email or role, contact an administrator.</p>
         </DashboardCard>
 
         <DashboardCard title="Change Password">

@@ -35,6 +35,7 @@ export const api = {
   register: (data: { email: string; password: string; name: string }) =>
     request('/auth/register', { method: 'POST', body: data }),
   getCurrentUser: () => request('/auth/me'),
+  updateMyName: (name: string) => request('/auth/me', { method: 'PUT', body: { name } }),
   changePassword: (data: { currentPassword: string; newPassword: string }) =>
     request('/auth/password', { method: 'PUT', body: data }),
 
@@ -61,4 +62,9 @@ export const api = {
   getAnalyticsDashboard: () => request('/reports/admin-dashboard'),
   exportAnalytics: () => request('/reports/export'),
   getAuditLogs: (limit = 100) => request(`/reports/audit-logs?limit=${limit}`),
+
+  // --- People (admin) ---
+  getUsers: () => request('/users'),
+  updateUserName: (userId: string, name: string) =>
+    request(`/users/${userId}/name`, { method: 'PUT', body: { name } }),
 }

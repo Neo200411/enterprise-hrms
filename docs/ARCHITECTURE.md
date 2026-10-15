@@ -83,7 +83,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Method | Endpoint | Who |
 |---|---|---|
 | POST | `/api/auth/register` · `/api/auth/login` | Public |
-| GET · PUT | `/api/auth/me` · `/api/auth/password` | Signed in |
+| GET · PUT | `/api/auth/me` (read / change own name) · `/api/auth/password` | Signed in |
 | GET · POST | `/api/goals` · `/api/goals/submit` | Signed in (own goals) |
 | GET | `/api/approvals/pending` | Manager, Admin |
 | PUT | `/api/approvals/submissions/:id/action` | Manager, Admin |
@@ -92,6 +92,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | GET | `/api/reports/employee-dashboard` | Signed in |
 | GET | `/api/reports/manager-dashboard` | Manager, Admin |
 | GET | `/api/reports/admin-dashboard` · `/export` · `/audit-logs` | Admin |
+| GET · PUT | `/api/users` · `/api/users/:id/name` (People page) | Admin |
 
 ## 5. Security
 
@@ -101,6 +102,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Login | Server issues a **JWT** (24 h). The browser sends it as `Authorization: Bearer …` |
 | Permissions | `authorize([...roles])` middleware on every protected route. The user's role is re-read from the database on each request, so a role change applies immediately |
 | Sign-up | Always creates an employee; roles are only changed by an admin |
+| Names | Anyone can rename themself in Settings; only an admin can rename others (People page) |
 | Brute force | Login limited to 10 attempts per 15 minutes |
 | SQL injection | Every query uses **parameters** (`$1, $2`), never string-built SQL |
 | Bad input | Validated on the client (Zod) **and** on the server |
