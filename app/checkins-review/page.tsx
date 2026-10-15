@@ -38,10 +38,11 @@ interface EmployeeCheckinGroup {
   checkins: Record<string, Checkin>
 }
 
-const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4']
-
 export default function CheckinsReviewPage() {
-  const [selectedQuarter, setSelectedQuarter] = useState('Q1')
+  // Periods (e.g. "Q4 2026") that have approved goals; the server picks the latest by default
+  const [periods, setPeriods] = useState<string[]>([])
+  const [requestedPeriod, setRequestedPeriod] = useState<string | undefined>(undefined)
+  const [selectedPeriod, setSelectedPeriod] = useState('')
   const [groups, setGroups] = useState<EmployeeCheckinGroup[]>([])
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -51,7 +52,9 @@ export default function CheckinsReviewPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await api.getTeamCheckins(selectedQuarter)
+      const data = await api.getTeamCheckins(requestedPeriod)
+      setPeriods(data?.periods || [])
+      setSelectedPeriod(data?.period || '')
       const goals: Goal[] = data?.goals || []
       const checkins: Checkin[] = data?.checkins || []
 
@@ -92,20 +95,16 @@ export default function CheckinsReviewPage() {
       const result = Object.values(grouped)
       setGroups(result)
       
-      // Auto-select first employee if none selected, or if selected is no longer in list
-      if (!selectedEmployeeId || !result.find(g => g.employee.id === selectedEmployeeId)) {
-        if (result.length > 0) {
-          setSelectedEmployeeId(result[0].employee.id)
-        } else {
-          setSelectedEmployeeId(null)
-        }
-      }
+      // Keep the selected employee if they're still in the list, otherwise pick the first
+      setSelectedEmployeeId(prev =>
+        prev && result.some(g => g.employee.id === prev) ? prev : result[0]?.employee.id ?? null
+      )
     } catch (err: any) {
       setError(err.message || 'Failed to load check-in data.')
     } finally {
       setIsLoading(false)
     }
-  }, [selectedQuarter, selectedEmployeeId])
+  }, [requestedPeriod])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -127,15 +126,19 @@ export default function CheckinsReviewPage() {
             <p className="text-sm text-muted-foreground mt-1">Review team quarterly progress updates</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">Quarter:</span>
-            <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
-              {QUARTERS.map(q => (
-                <button key={q} onClick={() => setSelectedQuarter(q)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedQuarter === q ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
-                  {q}
-                </button>
-              ))}
-            </div>
+            {periods.length > 0 && (
+              <>
+                <span className="text-sm font-medium text-foreground">Period:</span>
+                <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
+                  {periods.map(p => (
+                    <button key={p} onClick={() => setRequestedPeriod(p)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedPeriod === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -156,7 +159,7 @@ export default function CheckinsReviewPage() {
             <div className="py-16 text-center">
               <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
               <p className="text-foreground font-medium">No Check-ins Yet</p>
-              <p className="text-sm text-muted-foreground mt-1">No approved goals with check-ins for {selectedQuarter} yet.</p>
+              <p className="text-sm text-muted-foreground mt-1">No approved goals to review yet.</p>
             </div>
           </DashboardCard>
         ) : (
@@ -255,8 +258,8 @@ export default function CheckinsReviewPage() {
                             <p className={`text-sm font-bold ${progress >= 100 ? 'text-green-600' : progress > 50 ? 'text-blue-600' : 'text-foreground'}`}>{checkin ? `${progress}%` : '—'}</p>
                           </div>
                           <div className="p-2.5 bg-secondary/40 rounded-lg text-center">
-                            <p className="text-xs text-muted-foreground">Quarter</p>
-                            <p className="text-sm font-bold text-foreground">{selectedQuarter}</p>
+                            <p className="text-xs text-muted-foreground">Period</p>
+                            <p className="text-sm font-bold text-foreground">{selectedPeriod}</p>
                           </div>
                         </div>
 

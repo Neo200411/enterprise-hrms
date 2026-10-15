@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Mail, Lock, User, Building2, Check } from 'lucide-react'
+import { ArrowRight, Mail, Lock } from 'lucide-react'
 import { api } from '@/services/api'
 import { useAuth } from '@/components/providers/auth-provider'
 
@@ -14,19 +14,17 @@ export default function SignupPage() {
     firstName: '',
     lastName: '',
     email: '',
-    company: '',
     password: '',
     confirmPassword: '',
-    agreeToTerms: false,
   })
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target
+    const { name, value } = e.target
     setFormData((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+      [name]: value,
     }))
   }
 
@@ -47,11 +45,6 @@ export default function SignupPage() {
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
-      return
-    }
-
-    if (!formData.agreeToTerms) {
-      setError('Please agree to the terms and conditions')
       return
     }
 
@@ -143,25 +136,6 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {/* Company */}
-            <div>
-              <label htmlFor="company" className="block text-sm font-medium text-foreground mb-2">
-                Company Name (Optional)
-              </label>
-              <div className="relative">
-                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                <input
-                  id="company"
-                  name="company"
-                  type="text"
-                  value={formData.company}
-                  onChange={handleChange}
-                  placeholder="Your Company"
-                  className="w-full pl-10 pr-4 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-input text-foreground placeholder:text-muted-foreground"
-                />
-              </div>
-            </div>
-
             {/* Password */}
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
@@ -206,27 +180,6 @@ export default function SignupPage() {
                 {error}
               </div>
             )}
-
-            {/* Terms */}
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                name="agreeToTerms"
-                checked={formData.agreeToTerms}
-                onChange={handleChange}
-                className="w-4 h-4 border border-border rounded bg-input text-primary mt-1 flex-shrink-0"
-              />
-              <span className="text-sm text-muted-foreground">
-                I agree to the{' '}
-                <Link href="#" className="text-primary hover:text-primary/80">
-                  Terms of Service
-                </Link>{' '}
-                and{' '}
-                <Link href="#" className="text-primary hover:text-primary/80">
-                  Privacy Policy
-                </Link>
-              </span>
-            </label>
 
             {/* Submit Button */}
             <button

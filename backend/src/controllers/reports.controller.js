@@ -116,23 +116,16 @@ export const getAdminDashboard = async (req, res) => {
         LEFT JOIN public.goal_checkins gc ON g.id = gc.goal_id
       `),
 
-      // 4. QoQ Trend
+      // 4. Quarter-on-quarter trend (one point per goal period, e.g. "Q4 2026")
       query(`
-        SELECT 
-          gc.quarter,
-          SUM(gc.actual_achievement) as sum_actual,
-          SUM(g.target_value) as sum_target
+        SELECT
+          gs.period AS quarter,
+          SUM(LEAST(gc.actual_achievement, g.target_value)) AS sum_actual,
+          SUM(g.target_value) AS sum_target
         FROM public.goal_checkins gc
         JOIN public.goals g ON gc.goal_id = g.id
-        GROUP BY gc.quarter
-        ORDER BY 
-          CASE gc.quarter
-            WHEN 'Q1' THEN 1
-            WHEN 'Q2' THEN 2
-            WHEN 'Q3' THEN 3
-            WHEN 'Q4' THEN 4
-            ELSE 5
-          END
+        JOIN public.goal_submissions gs ON g.submission_id = gs.id
+        GROUP BY gs.period
       `),
 
       // 5. Thrust Data
@@ -220,7 +213,12 @@ export const getAdminDashboard = async (req, res) => {
 
     // -- QoQ Trend --
     // Calculate achievement rates and map to the format frontend expects
-    const computedQoq = qoqResult.rows.map(row => {
+    // Oldest period first so the chart reads left to right
+    const periodKey = (p) => {
+      const match = /^Q([1-4]) (\d{4})$/.exec(p);
+      return match ? Number(match[2]) * 10 + Number(match[1]) : 0;
+    };
+    const computedQoq = [...qoqResult.rows].sort((a, b) => periodKey(a.quarter) - periodKey(b.quarter)).map(row => {
       const rate = row.sum_target > 0 ? Math.round((row.sum_actual / row.sum_target) * 100) : 0;
       return {
         quarter: row.quarter,

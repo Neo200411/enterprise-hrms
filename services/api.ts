@@ -48,9 +48,12 @@ export const api = {
     request(`/approvals/submissions/${submissionId}/action`, { method: 'PUT', body: actionData }),
 
   // --- Quarterly check-ins ---
-  getMyCheckins: (quarter: string) => request(`/checkins/my-checkins?quarter=${quarter}`),
+  // period like "Q4 2026"; leave it out to get the most recent period with approved goals
+  getMyCheckins: (period?: string) =>
+    request(`/checkins/my-checkins${period ? `?period=${encodeURIComponent(period)}` : ''}`),
   submitCheckin: (data: unknown) => request('/checkins', { method: 'POST', body: data }),
-  getTeamCheckins: (quarter: string) => request(`/checkins/team?quarter=${quarter}`),
+  getTeamCheckins: (period?: string) =>
+    request(`/checkins/team${period ? `?period=${encodeURIComponent(period)}` : ''}`),
 
   // --- Reports & dashboards ---
   getEmployeeDashboard: () => request('/reports/employee-dashboard'),

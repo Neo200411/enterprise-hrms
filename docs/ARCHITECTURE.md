@@ -23,7 +23,7 @@ erDiagram
     goal_submissions ||--|{ goals : "contains 1–8"
     goal_submissions ||--o{ approvals : "reviewed in"
     users ||--o{ approvals : "manager decides"
-    goals ||--o{ goal_checkins : "one per quarter"
+    goals ||--o| goal_checkins : "progress for its quarter"
 ```
 
 | Table | What one row is | Key columns |
@@ -62,7 +62,7 @@ Rules the **server** enforces (not just the form):
 
 ### Quarterly check-ins
 
-For each *approved* goal, the employee records an actual achievement and a status (Not Started / On Track / Blocked / Completed) for Q1–Q4. Saving again in the same quarter updates the row (`INSERT … ON CONFLICT (goal_id, quarter) DO UPDATE`).
+Goals are planned for one period (e.g. "Q4 2026"), so each approved goal gets **one check-in, for its own quarter**. The Check-in page shows a tab for each period that has approved goals (newest first). The employee enters the actual achievement and a status (Not Started / On Track / Blocked / Completed). The server works out the quarter from the goal's period — the browser can't choose it. Saving again updates the same row (`INSERT … ON CONFLICT (goal_id, quarter) DO UPDATE`).
 
 **Score** = actual ÷ target × 100, capped at 100%. A goal with target 50 and actual 40 scores 80%.
 
@@ -85,8 +85,8 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | GET · POST | `/api/goals` · `/api/goals/submit` | Signed in (own goals) |
 | GET | `/api/approvals/pending` | Manager, Admin |
 | PUT | `/api/approvals/submissions/:id/action` | Manager, Admin |
-| GET · POST | `/api/checkins/my-checkins?quarter=Q1` · `/api/checkins` | Signed in |
-| GET | `/api/checkins/team?quarter=Q1` | Manager, Admin |
+| GET · POST | `/api/checkins/my-checkins?period=Q4 2026` · `/api/checkins` | Signed in |
+| GET | `/api/checkins/team?period=Q4 2026` | Manager, Admin |
 | GET | `/api/reports/employee-dashboard` | Signed in |
 | GET | `/api/reports/manager-dashboard` | Manager, Admin |
 | GET | `/api/reports/admin-dashboard` · `/export` · `/audit-logs` | Admin |

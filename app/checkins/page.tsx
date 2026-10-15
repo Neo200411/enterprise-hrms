@@ -27,7 +27,6 @@ interface Checkin {
   progress_status: string
 }
 
-const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4']
 const STATUS_OPTIONS = ['Not Started', 'On Track', 'Blocked', 'Completed']
 
 export default function CheckinsPage() {
@@ -35,7 +34,10 @@ export default function CheckinsPage() {
   const { toast } = useToast()
   const [goals, setGoals] = useState<Goal[]>([])
   const [checkins, setCheckins] = useState<Record<string, Checkin>>({})
-  const [selectedQuarter, setSelectedQuarter] = useState('Q1')
+  // Periods (e.g. "Q4 2026") that have approved goals; the server picks the latest by default
+  const [periods, setPeriods] = useState<string[]>([])
+  const [requestedPeriod, setRequestedPeriod] = useState<string | undefined>(undefined)
+  const [selectedPeriod, setSelectedPeriod] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [savingGoalId, setSavingGoalId] = useState<string | null>(null)
   const [savedGoalIds, setSavedGoalIds] = useState<Set<string>>(new Set())
@@ -46,7 +48,9 @@ export default function CheckinsPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const { goals: fetchedGoals, checkins: fetchedCheckins } = await api.getMyCheckins(selectedQuarter)
+      const { periods: fetchedPeriods, period, goals: fetchedGoals, checkins: fetchedCheckins } = await api.getMyCheckins(requestedPeriod)
+      setPeriods(fetchedPeriods || [])
+      setSelectedPeriod(period || '')
       setGoals(fetchedGoals || [])
       
       const map: Record<string, Checkin> = {}
@@ -61,7 +65,7 @@ export default function CheckinsPage() {
       }
       for (const goal of (fetchedGoals || [])) {
         if (!map[goal.id]) {
-          map[goal.id] = { goal_id: goal.id, quarter: selectedQuarter, actual_achievement: null, progress_status: 'Not Started' }
+          map[goal.id] = { goal_id: goal.id, quarter: '', actual_achievement: null, progress_status: 'Not Started' }
         }
       }
       setCheckins(map)
@@ -71,7 +75,7 @@ export default function CheckinsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [user, selectedQuarter])
+  }, [user, requestedPeriod])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -87,7 +91,6 @@ export default function CheckinsPage() {
     try {
       const payload = {
         goal_id: goalId,
-        quarter: selectedQuarter,
         actual_achievement: checkin.actual_achievement ?? 0,
         progress_status: checkin.progress_status,
       }
@@ -95,7 +98,7 @@ export default function CheckinsPage() {
       setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], id: response.checkin.id } }))
       
       setSavedGoalIds(prev => new Set(prev).add(goalId))
-      toast(`Successfully saved check-in for ${selectedQuarter}!`, 'success')
+      toast(`Successfully saved check-in for ${selectedPeriod}!`, 'success')
       setTimeout(() => setSavedGoalIds(prev => { const s = new Set(prev); s.delete(goalId); return s }), 3000)
     } catch (err: any) {
       setError(`Failed to save: ${err.message}`)
@@ -111,7 +114,7 @@ export default function CheckinsPage() {
       const progress = c?.actual_achievement != null && goal.target_value > 0
         ? Math.min(100, Math.round((c.actual_achievement / goal.target_value) * 100)) : 0
       return {
-        quarter: selectedQuarter,
+        period: selectedPeriod,
         thrust_area: goal.thrust_area,
         goal_title: goal.goal_title,
         uom_type: goal.uom_type,
@@ -123,7 +126,7 @@ export default function CheckinsPage() {
       }
     })
     const columns = [
-      { key: 'quarter', label: 'Quarter' },
+      { key: 'period', label: 'Period' },
       { key: 'thrust_area', label: 'Thrust Area' },
       { key: 'goal_title', label: 'Goal Title' },
       { key: 'uom_type', label: 'UoM' },
@@ -133,7 +136,7 @@ export default function CheckinsPage() {
       { key: 'progress_status', label: 'Status' },
       { key: 'weightage', label: 'Weightage (%)' },
     ]
-    downloadCsv(toCsv(rows, columns), `checkins-${selectedQuarter}-${Date.now()}.csv`)
+    downloadCsv(toCsv(rows, columns), `checkins-${selectedPeriod.replace(' ', '-')}-${Date.now()}.csv`)
   }
 
   return (
@@ -145,15 +148,19 @@ export default function CheckinsPage() {
             <p className="text-sm text-muted-foreground mt-1">Update your progress on approved goals</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-foreground">Quarter:</span>
-            <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
-              {QUARTERS.map(q => (
-                <button key={q} onClick={() => setSelectedQuarter(q)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedQuarter === q ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
-                  {q}
-                </button>
-              ))}
-            </div>
+            {periods.length > 0 && (
+              <>
+                <span className="text-sm font-medium text-foreground">Period:</span>
+                <div className="flex gap-1 border border-border rounded-lg p-1 bg-card">
+                  {periods.map(p => (
+                    <button key={p} onClick={() => setRequestedPeriod(p)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${selectedPeriod === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}`}>
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
             {goals.length > 0 && (
               <button
                 onClick={handleExport}
@@ -184,7 +191,7 @@ export default function CheckinsPage() {
               <AlertTriangle className="w-5 h-5 flex-shrink-0 text-amber-600 dark:text-amber-400 animate-pulse" />
               <div>
                 <h4 className="font-semibold text-sm">Action Required: {pendingCount} Check-in{pendingCount > 1 ? 's' : ''} Pending</h4>
-                <p className="text-xs opacity-90 mt-0.5">Please update your actual achievement and progress status for {selectedQuarter} to remain compliant with HR tracking.</p>
+                <p className="text-xs opacity-90 mt-0.5">Please update your actual achievement and progress status for {selectedPeriod} to remain compliant with HR tracking.</p>
               </div>
             </div>
           )
@@ -203,7 +210,7 @@ export default function CheckinsPage() {
         ) : (
           <div className="space-y-4">
             {goals.map(goal => {
-              const checkin = checkins[goal.id] || { goal_id: goal.id, quarter: selectedQuarter, actual_achievement: null, progress_status: 'Not Started' }
+              const checkin = checkins[goal.id] || { goal_id: goal.id, quarter: '', actual_achievement: null, progress_status: 'Not Started' }
               const isSaving = savingGoalId === goal.id
               const isSaved = savedGoalIds.has(goal.id)
               const progress = checkin.actual_achievement != null && goal.target_value > 0

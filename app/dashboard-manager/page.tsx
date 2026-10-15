@@ -4,6 +4,7 @@ import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { BarChart3, Users, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { api } from '@/services/api'
 
 interface PerformanceDistribution {
@@ -157,21 +158,15 @@ export default function ManagerDashboard() {
             {/* Quick Actions */}
             <DashboardCard title="Quick Actions">
               <div className="space-y-2">
-                <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors duration-200 font-medium text-sm">
+                <Link href="/approvals" className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors duration-200 font-medium text-sm">
                   <span>Review Approvals</span>
                   <span className="bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                     {metrics.approvalsPending}
                   </span>
-                </button>
-                <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-secondary transition-colors duration-200 font-medium text-sm">
+                </Link>
+                <Link href="/checkins-review" className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-secondary transition-colors duration-200 font-medium text-sm">
                   <span>Check Team Performance</span>
-                </button>
-                <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-secondary transition-colors duration-200 font-medium text-sm">
-                  <span>Schedule 1-on-1s</span>
-                </button>
-                <button className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border hover:bg-secondary transition-colors duration-200 font-medium text-sm">
-                  <span>Generate Report</span>
-                </button>
+                </Link>
               </div>
             </DashboardCard>
           </div>
