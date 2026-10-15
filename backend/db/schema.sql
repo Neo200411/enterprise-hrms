@@ -61,7 +61,10 @@ CREATE TABLE IF NOT EXISTS public.goal_checkins (
   quarter            TEXT NOT NULL CHECK (quarter IN ('Q1', 'Q2', 'Q3', 'Q4')),
   actual_achievement NUMERIC,
   progress_status    TEXT,
+  blocker_note       TEXT,  -- why the goal is blocked (only set when progress_status = 'Blocked')
   created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (goal_id, quarter)
 );
+-- Adds the column to databases created before it existed
+ALTER TABLE public.goal_checkins ADD COLUMN IF NOT EXISTS blocker_note TEXT;

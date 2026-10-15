@@ -20,6 +20,15 @@ interface GoalStatusBreakdown {
   color: string
 }
 
+interface BlockedGoal {
+  id: string
+  employee: string
+  goal_title: string
+  period: string
+  blocker_note: string | null
+  updated_at: string
+}
+
 interface ManagerDashboardMetrics {
   teamMembers: number
   activeGoals: number
@@ -27,6 +36,7 @@ interface ManagerDashboardMetrics {
   teamScore: number
   performanceDistribution: PerformanceDistribution[]
   goalStatusBreakdown: GoalStatusBreakdown[]
+  blockedGoals: BlockedGoal[]
 }
 
 export default function ManagerDashboard() {
@@ -139,7 +149,7 @@ export default function ManagerDashboard() {
                     <div key={category.label}>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-foreground">{category.label}</span>
-                        <span className="text-sm font-bold text-foreground">{category.count} members</span>
+                        <span className="text-sm font-bold text-foreground">{category.count} {category.count === 1 ? 'member' : 'members'}</span>
                       </div>
                       <div className="w-full bg-muted rounded-full h-3">
                         <div
@@ -168,6 +178,32 @@ export default function ManagerDashboard() {
                   <span>Check Team Performance</span>
                 </Link>
               </div>
+            </DashboardCard>
+          </div>
+
+          {/* Goals employees have flagged as blocked */}
+          <div className="mt-8">
+            <DashboardCard title={`Blocked Goals (${metrics.blockedGoals?.length || 0})`}>
+              {metrics.blockedGoals?.length ? (
+                <div className="divide-y divide-border">
+                  {metrics.blockedGoals.map((item) => (
+                    <div key={item.id} className="py-3 flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground">
+                          {item.goal_title} <span className="font-normal text-muted-foreground">· {item.employee} · {item.period}</span>
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-0.5">“{item.blocker_note || 'No reason given'}”</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground flex-shrink-0">
+                        {new Date(item.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">No blocked goals — nobody on the team is stuck.</p>
+              )}
             </DashboardCard>
           </div>
 

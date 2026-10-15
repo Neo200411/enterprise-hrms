@@ -32,7 +32,7 @@ erDiagram
 | `goal_submissions` | One employee's goal plan for one period | `user_id`, `period` (e.g. "Q4 2026"), `status` — **unique per user + period** |
 | `goals` | One goal inside a submission | `thrust_area`, `goal_title`, `target_value`, `weightage` |
 | `approvals` | One manager decision (history is kept) | `submission_id`, `manager_id`, `approval_action`, `remarks` |
-| `goal_checkins` | Progress on one goal for one quarter | `goal_id`, `quarter`, `actual_achievement`, `progress_status` — **unique per goal + quarter** |
+| `goal_checkins` | Progress on one goal for one quarter | `goal_id`, `quarter`, `actual_achievement`, `progress_status`, `blocker_note` — **unique per goal + quarter** |
 
 **Why split submissions and goals?** Approval happens on the *whole plan*, not on single goals — the weightages must add up to 100% together. So the status lives on the submission, and goals hang off it.
 
@@ -64,6 +64,8 @@ Rules the **server** enforces (not just the form):
 
 Goals are planned for one period (e.g. "Q4 2026"), so each approved goal gets **one check-in, for its own quarter**. The Check-in page shows a tab for each period that has approved goals (newest first). The employee enters the actual achievement and a status (Not Started / On Track / Blocked / Completed). The server works out the quarter from the goal's period — the browser can't choose it. Saving again updates the same row (`INSERT … ON CONFLICT (goal_id, quarter) DO UPDATE`).
 
+**Blockers:** if the employee picks **Blocked**, they must say why (up to 500 characters — the server enforces this). The reason is saved in `blocker_note`, shown to the manager under the red badge in Check-in Reviews, and listed in a **Blocked Goals** panel on the Manager Dashboard. Changing the status away from Blocked clears the reason.
+
 **Score** = actual ÷ target × 100, capped at 100%. A goal with target 50 and actual 40 scores 80%.
 
 ### Reports
@@ -73,7 +75,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Who | Report |
 |---|---|
 | Employee | Active / completed / pending goals, own score, recent check-ins |
-| Manager | Team size, pending approvals, team score, performance distribution, goal status breakdown |
+| Manager | Team size, pending approvals, team score, performance distribution, goal status breakdown, blocked goals with reasons |
 | Admin | Org KPIs, status pie chart, quarter-on-quarter trend, approval turnaround, goals pending > 7 days, audit log, CSV export |
 
 ## 4. API

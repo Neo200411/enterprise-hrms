@@ -24,6 +24,7 @@ interface Checkin {
   quarter: string
   actual_achievement: number | null
   progress_status: string
+  blocker_note?: string | null
 }
 
 interface Employee {
@@ -262,6 +263,12 @@ export default function CheckinsReviewPage() {
                             <p className="text-sm font-bold text-foreground">{selectedPeriod}</p>
                           </div>
                         </div>
+
+                        {checkin?.progress_status === 'Blocked' && (
+                          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+                            <span className="font-semibold">Blocked:</span> {checkin.blocker_note || 'No reason given'}
+                          </div>
+                        )}
 
                         {checkin && (
                           <div className="bg-border rounded-full h-2">

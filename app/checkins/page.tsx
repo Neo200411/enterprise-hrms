@@ -25,6 +25,7 @@ interface Checkin {
   quarter: string
   actual_achievement: number | null
   progress_status: string
+  blocker_note?: string | null
 }
 
 const STATUS_OPTIONS = ['Not Started', 'On Track', 'Blocked', 'Completed']
@@ -61,6 +62,7 @@ export default function CheckinsPage() {
           quarter: c.quarter,
           actual_achievement: c.actual_achievement,
           progress_status: c.progress_status || 'Not Started',
+          blocker_note: c.blocker_note,
         }
       }
       for (const goal of (fetchedGoals || [])) {
@@ -87,12 +89,17 @@ export default function CheckinsPage() {
   const saveCheckin = async (goalId: string) => {
     const checkin = checkins[goalId]
     if (!checkin) return
+    if (checkin.progress_status === 'Blocked' && !checkin.blocker_note?.trim()) {
+      toast('Please explain what is blocking this goal', 'warning')
+      return
+    }
     setSavingGoalId(goalId)
     try {
       const payload = {
         goal_id: goalId,
         actual_achievement: checkin.actual_achievement ?? 0,
         progress_status: checkin.progress_status,
+        blocker_note: checkin.progress_status === 'Blocked' ? checkin.blocker_note : null,
       }
       const response = await api.submitCheckin(payload)
       setCheckins(prev => ({ ...prev, [goalId]: { ...prev[goalId], id: response.checkin.id } }))
@@ -258,15 +265,33 @@ export default function CheckinsPage() {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-foreground mb-1 block">Progress Status</label>
+                    <select value={checkin.progress_status}
+                      onChange={e => updateCheckin(goal.id, 'progress_status', e.target.value)}
+                      className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                      {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  {checkin.progress_status === 'Blocked' && (
                     <div>
-                      <label className="text-xs font-medium text-foreground mb-1 block">Progress Status</label>
-                      <select value={checkin.progress_status}
-                        onChange={e => updateCheckin(goal.id, 'progress_status', e.target.value)}
-                        className="px-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      <label className="text-xs font-medium text-foreground mb-1 block">
+                        What is blocking this goal? <span className="text-destructive">*</span>
+                      </label>
+                      <textarea
+                        value={checkin.blocker_note ?? ''}
+                        onChange={e => updateCheckin(goal.id, 'blocker_note', e.target.value)}
+                        maxLength={500}
+                        rows={2}
+                        placeholder="e.g. Waiting on CRM access from IT"
+                        className="w-full px-3 py-2 bg-card border border-red-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">Your manager will see this on their dashboard.</p>
                     </div>
+                  )}
+
+                  <div className="flex justify-end">
                     <button onClick={() => saveCheckin(goal.id)} disabled={isSaving}
                       className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isSaved ? 'bg-green-500/10 text-green-600 border border-green-500/30' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}>
                       {isSaving ? <><Clock className="w-4 h-4 animate-spin" /> Saving...</> : isSaved ? <><CheckCircle className="w-4 h-4" /> Saved</> : <><Save className="w-4 h-4" /> Save Progress</>}

@@ -340,7 +340,8 @@ export const getManagerDashboard = async (req, res) => {
       goalsCountResult,
       pendingCountResult,
       performanceResult,
-      statusResult
+      statusResult,
+      blockedResult
     ] = await Promise.all([
       query(`SELECT COUNT(*)::int as count FROM public.users WHERE role IN ('employee', 'manager')`),
       
@@ -383,6 +384,23 @@ export const getManagerDashboard = async (req, res) => {
         JOIN public.goal_submissions gs ON g.submission_id = gs.id AND gs.status = 'approved'
         LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
         GROUP BY 1
+      `),
+
+      // Goals employees have flagged as Blocked, with their reason (most recent first)
+      query(`
+        SELECT
+          gc.id,
+          COALESCE(u.name, split_part(u.email, '@', 1)) AS employee,
+          g.goal_title,
+          gs.period,
+          gc.blocker_note,
+          gc.updated_at
+        FROM public.goal_checkins gc
+        JOIN public.goals g ON g.id = gc.goal_id
+        JOIN public.goal_submissions gs ON gs.id = g.submission_id AND gs.status = 'approved'
+        JOIN public.users u ON u.id = gs.user_id
+        WHERE gc.progress_status = 'Blocked'
+        ORDER BY gc.updated_at DESC
       `)
     ]);
 
@@ -421,7 +439,8 @@ export const getManagerDashboard = async (req, res) => {
       approvalsPending,
       teamScore,
       performanceDistribution,
-      goalStatusBreakdown
+      goalStatusBreakdown,
+      blockedGoals: blockedResult.rows
     });
   } catch (error) {
     console.error('Error fetching manager dashboard:', error);

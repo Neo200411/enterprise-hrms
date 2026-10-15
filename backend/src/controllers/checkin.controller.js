@@ -2,6 +2,7 @@ import { query } from '../config/db.js';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROGRESS_STATUSES = ['Not Started', 'On Track', 'In Progress', 'Blocked', 'Completed'];
+const MAX_BLOCKER_NOTE = 500;
 
 // Goals are planned per period ("Q4 2026"), so each goal is checked in once — for its own quarter.
 const quarterOf = (period) => String(period).split(' ')[0];
@@ -77,6 +78,8 @@ export const submitCheckin = async (req, res) => {
   try {
     const userId = req.user.id;
     const { goal_id, actual_achievement, progress_status } = req.body;
+    // A reason is required when a goal is blocked, and cleared otherwise
+    const blockerNote = progress_status === 'Blocked' ? String(req.body.blocker_note || '').trim() : null;
 
     if (!goal_id || !progress_status) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -92,6 +95,14 @@ export const submitCheckin = async (req, res) => {
 
     if (actual_achievement != null && !(Number(actual_achievement) >= 0)) {
       return res.status(400).json({ error: 'Actual achievement must be a number of 0 or more' });
+    }
+
+    if (progress_status === 'Blocked' && !blockerNote) {
+      return res.status(400).json({ error: 'Please explain what is blocking this goal' });
+    }
+
+    if (blockerNote && blockerNote.length > MAX_BLOCKER_NOTE) {
+      return res.status(400).json({ error: `Blocker reason must be ${MAX_BLOCKER_NOTE} characters or fewer` });
     }
 
     // The goal must belong to this user and be approved; its period decides the quarter
@@ -111,15 +122,16 @@ export const submitCheckin = async (req, res) => {
 
     // Insert, or update if this goal already has a check-in
     const upsertResult = await query(
-      `INSERT INTO public.goal_checkins (goal_id, quarter, actual_achievement, progress_status)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO public.goal_checkins (goal_id, quarter, actual_achievement, progress_status, blocker_note)
+       VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (goal_id, quarter)
        DO UPDATE SET
          actual_achievement = EXCLUDED.actual_achievement,
          progress_status = EXCLUDED.progress_status,
+         blocker_note = EXCLUDED.blocker_note,
          updated_at = NOW()
-       RETURNING id, goal_id, quarter, actual_achievement, progress_status`,
-      [goal_id, quarter, actual_achievement ?? null, progress_status]
+       RETURNING id, goal_id, quarter, actual_achievement, progress_status, blocker_note`,
+      [goal_id, quarter, actual_achievement ?? null, progress_status, blockerNote]
     );
 
     res.json({ checkin: upsertResult.rows[0], message: 'Check-in saved successfully.' });
