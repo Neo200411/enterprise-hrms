@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 const getHeaders = () => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('hr_token') : null;
@@ -140,6 +140,13 @@ export const api = {
 
   getEmployees: async () => {
     const res = await fetch(`${API_URL}/employees`, {
+      headers: getHeaders()
+    });
+    return handleResponse(res);
+  },
+
+  getAuditLogs: async (limit: number = 100) => {
+    const res = await fetch(`${API_URL}/analytics/logs?limit=${limit}`, {
       headers: getHeaders()
     });
     return handleResponse(res);

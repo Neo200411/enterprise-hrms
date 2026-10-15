@@ -81,9 +81,9 @@ export default function CheckinsPage() {
   }
 
   const saveCheckin = async (goalId: string) => {
-    setSavingGoalId(goalId)
     const checkin = checkins[goalId]
     if (!checkin) return
+    setSavingGoalId(goalId)
     try {
       const payload = {
         goal_id: goalId,

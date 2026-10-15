@@ -121,7 +121,7 @@ Create a `.env.local` file:
 NEXT_PUBLIC_API_URL=http://localhost:5001/api
 ```
 
-And in the `backend/` directory, create a `.env`:
+And in the `backend/` directory, create a `.env` (see `backend/.env.example`):
 
 ```env
 DATABASE_URL=your_postgresql_connection_string
@@ -129,11 +129,27 @@ JWT_SECRET=your_jwt_secret
 PORT=5001
 ```
 
-### Run Development Server
+### Set Up the Database
+
+Creates all tables (`backend/db/schema.sql`) and the demo accounts below. Safe to re-run.
 
 ```bash
+cd backend
+npm install
+npm run db:setup
+```
+
+### Run Development Servers
+
+```bash
+# Terminal 1 — API on http://localhost:5001
+cd backend && npm run dev
+
+# Terminal 2 — frontend on http://localhost:3000
 npm run dev
 ```
+
+Check `http://localhost:5001/health` — it reports whether the database is reachable.
 
 ---
 
@@ -150,6 +166,12 @@ npm run dev
 ### Admin
 - **Email:** admin@test.com
 - **Password:** Test@123
+
+New sign-ups are always created as employees. To make someone a manager or admin:
+
+```sql
+UPDATE public.users SET role = 'manager' WHERE email = 'person@company.com';
+```
 
 ---
 

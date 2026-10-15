@@ -14,6 +14,8 @@ export default function GoalsPage() {
   const { user } = useAuth()
   const [submission, setSubmission] = useState<GoalSubmission | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [usedPeriods, setUsedPeriods] = useState<string[]>([])
+  const [isPlanningNew, setIsPlanningNew] = useState(false)
 
   const fetchSubmission = async () => {
     if (!user) return
@@ -21,7 +23,9 @@ export default function GoalsPage() {
     
     try {
       const response = await api.getGoals()
-      
+      setUsedPeriods((response.submissions || []).map((s: any) => s.period))
+      setIsPlanningNew(false)
+
       if (response.submissions && response.submissions.length > 0) {
         // Find the overall status based on the first submission
         const currentSubmission = response.submissions[0]
@@ -119,7 +123,14 @@ export default function GoalsPage() {
         </div>
       ) : (
         <>
-          {(!submission || submission.status === 'draft' || submission.status === 'rejected') ? (
+          {isPlanningNew ? (
+            <GoalForm
+              initialData={null}
+              usedPeriods={usedPeriods}
+              onSuccess={fetchSubmission}
+              onCancel={() => setIsPlanningNew(false)}
+            />
+          ) : (!submission || submission.status === 'draft' || submission.status === 'rejected') ? (
             <GoalForm 
               initialData={submission} 
               onSuccess={fetchSubmission} 
@@ -130,7 +141,7 @@ export default function GoalsPage() {
                 <div className={`p-2 rounded-full ${submission.status === 'approved' ? 'bg-status-success/20 text-status-success' : 'bg-status-pending/20 text-status-pending'}`}>
                   {submission.status === 'approved' ? <CheckCircle2 className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-foreground text-lg">Goal Submission - {submission.period}</h3>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
                     Status: 
@@ -139,6 +150,12 @@ export default function GoalsPage() {
                     </span>
                   </p>
                 </div>
+                <button
+                  onClick={() => setIsPlanningNew(true)}
+                  className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Plan Next Period
+                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">

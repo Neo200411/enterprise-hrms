@@ -15,7 +15,7 @@ export const getEmployeeDashboard = async (req, res) => {
           COUNT(DISTINCT CASE WHEN gs.status = 'approved' THEN g.id END)::int as active_goals,
           COUNT(DISTINCT CASE WHEN gs.status = 'approved' AND LOWER(gc.progress_status) = 'completed' THEN g.id END)::int as completed_goals,
           COUNT(DISTINCT CASE WHEN gs.status = 'pending_approval' THEN g.id END)::int as pending_goals,
-          LEAST(ROUND(COALESCE(AVG(gc.actual_achievement), 0)), 100)::int as performance_score
+          LEAST(ROUND(COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0)), 100)::int as performance_score
         FROM public.goal_submissions gs
         LEFT JOIN public.goals g ON g.submission_id = gs.id
         LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
@@ -41,7 +41,7 @@ export const getEmployeeDashboard = async (req, res) => {
           gc.actual_achievement,
           CASE 
             WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
-            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress') THEN 'In Progress'
+            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'In Progress'
             WHEN LOWER(gc.progress_status) = 'blocked' THEN 'Blocked'
             ELSE 'Pending'
           END as progress_status,

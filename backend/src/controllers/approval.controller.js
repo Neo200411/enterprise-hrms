@@ -10,8 +10,9 @@ export const getPendingApprovals = async (req, res) => {
          u.name as employee_name, u.email as employee_email
        FROM public.goal_submissions gs
        JOIN public.users u ON gs.user_id = u.id
-       WHERE gs.status = 'pending_approval'
-       ORDER BY gs.created_at ASC`
+       WHERE gs.status = 'pending_approval' AND gs.user_id <> $1
+       ORDER BY gs.created_at ASC`,
+      [req.user.id]
     );
 
     if (submissionsResult.rows.length === 0) {
@@ -44,7 +45,8 @@ export const getPendingApprovals = async (req, res) => {
 // Approve or reject a submission
 export const updateSubmissionStatus = async (req, res) => {
   const client = await pool.connect();
-  
+  let inTransaction = false;
+
   try {
     const managerId = req.user.id;
     const { submissionId } = req.params;
@@ -56,7 +58,7 @@ export const updateSubmissionStatus = async (req, res) => {
 
     // 1. Verify submission exists and is pending
     const submissionCheck = await client.query(
-      'SELECT id, status FROM public.goal_submissions WHERE id = $1',
+      'SELECT id, user_id, status FROM public.goal_submissions WHERE id = $1',
       [submissionId]
     );
 
@@ -68,8 +70,24 @@ export const updateSubmissionStatus = async (req, res) => {
       return res.status(400).json({ error: 'Only pending_approval submissions can be reviewed.' });
     }
 
+    if (submissionCheck.rows[0].user_id === managerId) {
+      return res.status(403).json({ error: 'You cannot review your own goal submission.' });
+    }
+
     // 2. Begin transaction
     await client.query('BEGIN');
+    inTransaction = true;
+
+    // Re-check status under a row lock so two reviewers can't act on the same submission
+    const locked = await client.query(
+      'SELECT status FROM public.goal_submissions WHERE id = $1 FOR UPDATE',
+      [submissionId]
+    );
+    if (locked.rows[0].status !== 'pending_approval') {
+      await client.query('ROLLBACK');
+      inTransaction = false;
+      return res.status(409).json({ error: 'This submission has already been reviewed.' });
+    }
 
     // Update submission status
     await client.query(
@@ -97,9 +115,10 @@ export const updateSubmissionStatus = async (req, res) => {
     }
 
     await client.query('COMMIT');
+    inTransaction = false;
     res.json({ message: `Submission successfully ${action}.` });
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (inTransaction) await client.query('ROLLBACK').catch(() => {});
     console.error('Error updating submission status:', error);
     res.status(500).json({ error: 'Internal server error' });
   } finally {

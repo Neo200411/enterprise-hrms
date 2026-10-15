@@ -16,7 +16,7 @@ export const getTeamMembers = async (req, res) => {
         COUNT(DISTINCT CASE WHEN gs.status = 'approved' AND LOWER(gc.progress_status) = 'completed' THEN g.id END)::int as completed_goals_count,
         COUNT(DISTINCT CASE WHEN gs.status IN ('draft', 'pending_approval', 'rejected') THEN g.id END)::int as pending_goals_count,
         MAX(gc.quarter) as latest_checkin_quarter,
-        LEAST(ROUND(COALESCE(AVG(gc.actual_achievement), 0)), 100)::int as performance_score
+        LEAST(ROUND(COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0)), 100)::int as performance_score
       FROM public.users u
       LEFT JOIN public.goal_submissions gs ON gs.user_id = u.id
       LEFT JOIN public.goals g ON g.submission_id = gs.id

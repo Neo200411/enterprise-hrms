@@ -7,10 +7,17 @@ const SALT_ROUNDS = 10;
 
 export const register = async (req, res) => {
   try {
-    const { email, password, role, name } = req.body;
+    const { email, password, name } = req.body;
+    // Self-registration always creates an employee. Managers/admins are promoted
+    // in the database by an admin, never chosen by the client.
+    const role = 'employee';
 
-    if (!email || !password || !role || !name) {
+    if (!email || !password || !name) {
       return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     // Check if user already exists

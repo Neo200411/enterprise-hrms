@@ -40,6 +40,11 @@ export default function SignupPage() {
       return
     }
 
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
       return
@@ -56,7 +61,6 @@ export default function SignupPage() {
       const response = await api.register({
         email: formData.email,
         password: formData.password,
-        role: 'employee',
         name: `${formData.firstName} ${formData.lastName}`
       })
 

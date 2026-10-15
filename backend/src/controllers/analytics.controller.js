@@ -205,6 +205,50 @@ export const exportGoalsData = async (req, res) => {
   }
 };
 
+// Audit Log: recent goal submissions and review decisions
+export const getAuditLogs = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 100, 500);
+
+    const result = await query(`
+      SELECT * FROM (
+        SELECT
+          'approval-' || a.id AS id,
+          a.created_at AS timestamp,
+          COALESCE(u.name, split_part(u.email, '@', 1)) AS "user",
+          CASE a.approval_action WHEN 'approved' THEN 'Approved Goals' ELSE 'Returned for Rework' END AS action,
+          'Goals for ' || COALESCE(owner.name, split_part(owner.email, '@', 1)) || ' (' || gs.period || ')' AS resource,
+          a.approval_action AS outcome,
+          COALESCE(NULLIF(a.remarks, ''), 'No remarks') AS details
+        FROM public.approvals a
+        JOIN public.goal_submissions gs ON gs.id = a.submission_id
+        JOIN public.users u ON u.id = a.manager_id
+        JOIN public.users owner ON owner.id = gs.user_id
+
+        UNION ALL
+
+        SELECT
+          'submission-' || gs.id AS id,
+          COALESCE(gs.updated_at, gs.created_at) AS timestamp,
+          COALESCE(u.name, split_part(u.email, '@', 1)) AS "user",
+          CASE WHEN gs.status = 'draft' THEN 'Saved Draft' ELSE 'Submitted Goals' END AS action,
+          'Goals for ' || gs.period AS resource,
+          gs.status AS outcome,
+          (SELECT COUNT(*) FROM public.goals g WHERE g.submission_id = gs.id) || ' goal(s)' AS details
+        FROM public.goal_submissions gs
+        JOIN public.users u ON u.id = gs.user_id
+      ) logs
+      ORDER BY timestamp DESC
+      LIMIT $1
+    `, [limit]);
+
+    res.json({ logs: result.rows });
+  } catch (error) {
+    console.error('Error fetching audit logs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // Manager Dashboard Metrics
 export const getManagerDashboard = async (req, res) => {
   try {
@@ -225,13 +269,15 @@ export const getManagerDashboard = async (req, res) => {
         WITH user_scores AS (
           SELECT 
             u.id,
-            COALESCE(AVG(gc.actual_achievement), 0) as avg_score
+            COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0) as avg_score
           FROM public.users u
           LEFT JOIN public.goal_submissions gs ON gs.user_id = u.id AND gs.status = 'approved'
           LEFT JOIN public.goals g ON g.submission_id = gs.id
           LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
           WHERE u.role IN ('employee', 'manager')
           GROUP BY u.id
+          -- Only score people who have actually checked in; otherwise they'd count as 0%
+          HAVING COUNT(gc.id) > 0
         )
         SELECT 
           ROUND(AVG(avg_score))::int as team_score,
@@ -245,7 +291,7 @@ export const getManagerDashboard = async (req, res) => {
         SELECT 
           CASE 
             WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
-            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress') THEN 'In Progress'
+            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'In Progress'
             WHEN LOWER(gc.progress_status) = 'blocked' THEN 'Blocked'
             ELSE 'Pending'
           END as status,

@@ -8,7 +8,7 @@ export const getAllEmployees = async (req, res) => {
         COALESCE(u.name, split_part(u.email, '@', 1)) as name, 
         u.email, 
         u.role,
-        LEAST(ROUND(COALESCE(AVG(gc.actual_achievement), 0)), 100)::int as performance_score,
+        LEAST(ROUND(COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0)), 100)::int as performance_score,
         COUNT(DISTINCT CASE WHEN gs.status = 'approved' THEN g.id END)::int as active_goals,
         MAX(COALESCE(gc.created_at, gs.created_at, u.created_at)) as latest_activity
       FROM public.users u

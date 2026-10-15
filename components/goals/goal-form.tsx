@@ -14,6 +14,25 @@ interface GoalFormProps {
   initialData?: GoalSubmission | null
   onSuccess?: () => void
   onCancel?: () => void
+  /** Periods that already have a submission and can't be planned again */
+  usedPeriods?: string[]
+}
+
+// Current quarter plus the next three, e.g. ["Q4 2026", "Q1 2027", ...]
+const getUpcomingPeriods = (count = 4) => {
+  const now = new Date()
+  let quarter = Math.floor(now.getMonth() / 3) + 1
+  let year = now.getFullYear()
+  const periods: string[] = []
+  for (let i = 0; i < count; i++) {
+    periods.push(`Q${quarter} ${year}`)
+    quarter++
+    if (quarter > 4) {
+      quarter = 1
+      year++
+    }
+  }
+  return periods
 }
 
 const defaultGoal = {
@@ -26,7 +45,11 @@ const defaultGoal = {
   weightage: 10,
 }
 
-export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormProps) {
+export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods = [] }: GoalFormProps) {
+  // An existing draft/rejected submission stays on its own period
+  const periodOptions = initialData?.period
+    ? [initialData.period]
+    : getUpcomingPeriods().filter(p => !usedPeriods.includes(p))
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -44,7 +67,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
   } = useForm<GoalSubmission>({
     resolver: zodResolver(goalSubmissionSchema),
     defaultValues: initialData || {
-      period: 'Q4 2024',
+      period: periodOptions[0] || getUpcomingPeriods()[0],
       status: 'draft',
       goals: [defaultGoal],
     },
@@ -133,9 +156,9 @@ export default function GoalForm({ initialData, onSuccess, onCancel }: GoalFormP
               {...register('period')}
               className="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              <option value="Q4 2024">Q4 2024</option>
-              <option value="Q1 2025">Q1 2025</option>
-              <option value="Q2 2025">Q2 2025</option>
+              {periodOptions.map(period => (
+                <option key={period} value={period}>{period}</option>
+              ))}
             </select>
           </div>
           
