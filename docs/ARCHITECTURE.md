@@ -62,7 +62,7 @@ Rules the **server** enforces (not just the form):
 
 ### AI goal assistant (optional)
 
-Each goal in the form has an **✨ Improve with AI** button. It sends what the employee typed to `POST /api/ai/improve-goal`; the backend asks **Groq** (Llama 3.3, OpenAI-compatible API) to rewrite it as one clear, measurable goal and to reply in **JSON mode** with exactly the form's fields.
+Each goal in the form has an **✨ Improve with AI** button. It sends what the employee typed to `POST /api/ai/improve-goal`; the backend asks **Groq** (GPT-OSS 120B model, OpenAI-compatible API) to rewrite it as one clear, measurable goal and to reply in **JSON mode** with exactly the form's fields.
 
 - The prompt tells the model that progress is scored as actual ÷ target, so it turns "reduce X" goals into "higher is better" goals.
 - The backend **never trusts the answer blindly**: values outside the form's options are replaced, titles are trimmed, and targets must be positive.

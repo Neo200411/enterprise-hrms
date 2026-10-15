@@ -18,7 +18,7 @@ How it works end to end — tables, workflows, API — is in **[docs/ARCHITECTUR
 | Backend | Node.js + Express REST API |
 | Database | PostgreSQL (5 tables) |
 | Auth | JWT + bcrypt password hashing, role-based access control |
-| AI (optional) | Groq API (Llama 3.3) for the goal-writing assistant |
+| AI (optional) | Groq API (GPT-OSS 120B) for the goal-writing assistant |
 
 ## Project Structure
 
