@@ -75,7 +75,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Who | Report |
 |---|---|
 | Employee | Active / completed / pending goals, own score, recent check-ins |
-| Manager | Team size, pending approvals, team score, performance distribution, goal status breakdown, blocked goals with reasons |
+| Manager | Plans waiting for approval (oldest first), blocked goals with reasons, team size, team score, performance distribution, goal status breakdown. "Team" means everyone except the manager themself |
 | Admin | Org KPIs, status pie chart, quarter-on-quarter trend, approval turnaround, goals pending > 7 days, audit log, CSV export |
 
 ## 4. API

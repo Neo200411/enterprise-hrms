@@ -26,8 +26,9 @@ interface EmployeeSubmission {
   employee_id: string
   employee_name: string
   employee_email: string
-  period?: string
-  status: 'pending_approval' | 'approved' | 'rejected' | string
+  period: string
+  status: string
+  previous_remarks: string | null
   goals: Goal[]
 }
 
@@ -44,11 +45,12 @@ export default function ApprovalsPage() {
   // Edit state for inline editing
   const [editedGoals, setEditedGoals] = useState<Record<string, Partial<Goal>>>({})
 
-  const getSubmissionAge = (goals: Goal[]) => {
+  // Days since the plan was (re)submitted — goals are re-created on every submission
+  const getDaysWaiting = (goals: Goal[]) => {
     if (!goals || goals.length === 0) return 0
-    const oldest = Math.min(...goals.map(g => new Date(g.created_at).getTime()))
-    if (isNaN(oldest)) return 0
-    return Math.max(0, Math.round((Date.now() - oldest) / (1000 * 60 * 60 * 24)))
+    const submitted = Math.max(...goals.map(g => new Date(g.created_at).getTime()))
+    if (isNaN(submitted)) return 0
+    return Math.max(0, Math.floor((Date.now() - submitted) / (1000 * 60 * 60 * 24)))
   }
 
   const fetchApprovals = async () => {
@@ -149,13 +151,14 @@ export default function ApprovalsPage() {
     }))
   }
 
-  const pendingCount = submissions.filter((s) => s.status === 'pending_approval').length
+  // The list only ever contains plans waiting for a decision
+  const pendingCount = submissions.length
 
   return (
-    <AppLayout userRole="manager">
+    <AppLayout>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground mb-2">Approvals Workflow</h1>
-        <p className="text-muted-foreground">Manage team submissions and approvals</p>
+        <h1 className="text-3xl font-bold text-foreground mb-2">Approvals</h1>
+        <p className="text-muted-foreground">Review your team's goal plans — approve them or send them back with feedback</p>
       </div>
 
       {error && (
@@ -212,11 +215,11 @@ export default function ApprovalsPage() {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
         {/* Main List */}
         <div className="xl:col-span-1">
-          <DashboardCard title="Employee Submissions">
+          <DashboardCard title="Waiting for Review">
             {isLoading ? (
               <p className="text-sm text-muted-foreground">Loading submissions...</p>
             ) : submissions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No goal submissions found.</p>
+              <p className="text-sm text-muted-foreground">You're all caught up — nothing to review.</p>
             ) : (
               <div className="space-y-3">
                 {submissions.map((sub) => (
@@ -235,36 +238,20 @@ export default function ApprovalsPage() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-2xl">🎯</span>
-                          <div>
-                            <p className="font-medium text-foreground">{sub.employee_name}</p>
-                            <p className="text-xs text-muted-foreground">{sub.goals.length} Goals Submitted</p>
-                          </div>
-                        </div>
+                        <p className="font-medium text-foreground">{sub.employee_name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {sub.period} · {sub.goals.length} {sub.goals.length === 1 ? 'goal' : 'goals'}
+                          {sub.previous_remarks && ' · resubmitted'}
+                        </p>
                       </div>
-                      <div className="text-right flex-shrink-0">
-                        {sub.status === 'pending_approval' && (() => {
-                          const age = getSubmissionAge(sub.goals)
-                          if (age > 7) {
-                            return (
-                              <div className="space-y-1">
-                                <div className="px-2.5 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
-                                <div className="px-2 py-0.5 bg-red-500/10 text-red-600 text-[10px] font-bold rounded-full border border-red-500/20 animate-pulse text-center">
-                                  ⚠️ {age}d Delay
-                                </div>
-                              </div>
-                            )
-                          }
-                          return <div className="px-2.5 py-1 bg-status-pending/20 text-status-pending text-xs font-semibold rounded-full border border-status-pending/20">Pending</div>
-                        })()}
-                        {sub.status === 'approved' && (
-                          <div className="px-2.5 py-1 bg-status-success/20 text-status-success text-xs font-semibold rounded-full border border-status-success/20">Approved</div>
-                        )}
-                        {sub.status === 'rejected' && (
-                          <div className="px-2.5 py-1 bg-destructive/20 text-destructive text-xs font-semibold rounded-full border border-destructive/20">Rework</div>
-                        )}
-                      </div>
+                      {(() => {
+                        const days = getDaysWaiting(sub.goals)
+                        return (
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full flex-shrink-0 ${days > 7 ? 'bg-red-500/10 text-red-600' : 'bg-status-pending/20 text-status-pending'}`}>
+                            {days === 0 ? 'Today' : `${days}d waiting`}
+                          </span>
+                        )
+                      })()}
                     </div>
                   </button>
                 ))}
@@ -276,13 +263,18 @@ export default function ApprovalsPage() {
         {/* Detail Panel */}
         <div className="xl:col-span-2">
           {selectedSubmission ? (
-            <DashboardCard title={`Review Goals: ${selectedSubmission.employee_name}`}>
+            <DashboardCard title={`Review Goals: ${selectedSubmission.employee_name} — ${selectedSubmission.period}`}>
               <div className="space-y-6">
+                {selectedSubmission.previous_remarks && (
+                  <div className="p-3 rounded-lg bg-secondary/50 border border-border text-sm">
+                    <span className="font-medium text-foreground">You previously returned this plan:</span>{' '}
+                    <span className="text-muted-foreground">“{selectedSubmission.previous_remarks}”</span>
+                  </div>
+                )}
                 
                 {/* Goals List */}
                 <div className="space-y-4">
                   {selectedSubmission.goals.map((goal, idx) => {
-                    const isPending = selectedSubmission.status === 'pending_approval'
                     const editedTarget = editedGoals[goal.id]?.target_value ?? goal.target_value
                     const editedWeightage = editedGoals[goal.id]?.weightage ?? goal.weightage
 
@@ -308,32 +300,24 @@ export default function ApprovalsPage() {
                             <p className="text-sm font-medium capitalize">{goal.measurement_type?.replace('_', ' ')}</p>
                           </div>
                           
-                          {/* Editable Fields */}
+                          {/* Manager can adjust target and weightage before approving */}
                           <div>
                             <p className="text-xs text-muted-foreground uppercase mb-1">Target</p>
-                            {isPending ? (
-                              <input 
-                                type="number" 
-                                value={editedTarget}
-                                onChange={(e) => handleInlineEdit(goal.id, 'target_value', e.target.value)}
-                                className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
-                              />
-                            ) : (
-                              <p className="text-sm font-medium">{goal.target_value}</p>
-                            )}
+                            <input
+                              type="number"
+                              value={editedTarget}
+                              onChange={(e) => handleInlineEdit(goal.id, 'target_value', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
+                            />
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground uppercase mb-1">Weightage (%)</p>
-                            {isPending ? (
-                              <input 
-                                type="number" 
-                                value={editedWeightage}
-                                onChange={(e) => handleInlineEdit(goal.id, 'weightage', e.target.value)}
-                                className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
-                              />
-                            ) : (
-                              <p className="text-sm font-medium">{goal.weightage}%</p>
-                            )}
+                            <input
+                              type="number"
+                              value={editedWeightage}
+                              onChange={(e) => handleInlineEdit(goal.id, 'weightage', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-border rounded bg-card focus:ring-1 focus:ring-primary"
+                            />
                           </div>
                         </div>
                       </div>
@@ -342,78 +326,52 @@ export default function ApprovalsPage() {
                 </div>
 
                 {/* Weightage total after any manager edits */}
-                {selectedSubmission.status === 'pending_approval' && (
-                  <div className={`flex items-center justify-between p-3 rounded-lg text-sm font-medium ${
-                    reviewedTotal === 100 ? 'bg-status-success/10 text-status-success' : 'bg-destructive/10 text-destructive'
-                  }`}>
-                    <span>Total Weightage</span>
-                    <span>{reviewedTotal}%{reviewedTotal !== 100 && ' — must equal 100% to approve'}</span>
-                  </div>
-                )}
+                <div className={`flex items-center justify-between p-3 rounded-lg text-sm font-medium ${
+                  reviewedTotal === 100 ? 'bg-status-success/10 text-status-success' : 'bg-destructive/10 text-destructive'
+                }`}>
+                  <span>Total Weightage</span>
+                  <span>{reviewedTotal}%{reviewedTotal !== 100 && ' — must equal 100% to approve'}</span>
+                </div>
 
                 {/* Feedback */}
-                {selectedSubmission.status === 'pending_approval' && (
-                  <div>
-                    <label className="block text-sm font-medium text-foreground mb-2">
-                      Manager Feedback <span className="text-muted-foreground font-normal">(required to return for rework)</span>
-                    </label>
-                    <textarea
-                      value={feedbackText}
-                      onChange={(e) => setFeedbackText(e.target.value)}
-                      placeholder="Provide feedback, praise, or reasoning for rework..."
-                      rows={3}
-                      className="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
-                    />
-                  </div>
-                )}
-
-                {/* Status Badge */}
-                {selectedSubmission.status !== 'pending_approval' && (
-                  <div
-                    className={`p-4 rounded-lg flex items-center gap-3 ${
-                      selectedSubmission.status === 'approved'
-                        ? 'bg-status-success/10 border border-status-success/20 text-status-success'
-                        : 'bg-destructive/10 border border-destructive/20 text-destructive'
-                    }`}
-                  >
-                    {selectedSubmission.status === 'approved' ? (
-                      <CheckCircle2 className="w-5 h-5" />
-                    ) : (
-                      <XCircle className="w-5 h-5" />
-                    )}
-                    <p className="text-sm font-semibold">
-                      This submission has been {selectedSubmission.status}.
-                    </p>
-                  </div>
-                )}
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-2">
+                    Manager Feedback <span className="text-muted-foreground font-normal">(required to return for rework)</span>
+                  </label>
+                  <textarea
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Provide feedback, praise, or reasoning for rework..."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-border rounded-lg bg-card focus:outline-none focus:ring-2 focus:ring-primary resize-none text-sm"
+                  />
+                </div>
 
                 {/* Action Buttons */}
-                {selectedSubmission.status === 'pending_approval' && (
-                  <div className="flex gap-4 pt-4 border-t border-border">
-                    <button
-                      onClick={() => handleAction('approved')}
-                      disabled={isSaving || reviewedTotal !== 100}
-                      className="flex-1 px-4 py-2 bg-status-success text-white font-semibold rounded-lg hover:bg-status-success/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSaving ? 'Processing...' : (
-                        <>
-                          <CheckCircle2 className="w-4 h-4" /> Approve Goals
-                        </>
-                      )}
-                    </button>
-                    <button
-                      onClick={() => handleAction('rejected')}
-                      disabled={isSaving || !feedbackText.trim()}
-                      className="flex-1 px-4 py-2 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isSaving ? 'Processing...' : (
-                        <>
-                          <MessageCircle className="w-4 h-4" /> Return for Rework
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
+                <div className="flex gap-4 pt-4 border-t border-border">
+                  <button
+                    onClick={() => handleAction('approved')}
+                    disabled={isSaving || reviewedTotal !== 100}
+                    className="flex-1 px-4 py-2 bg-status-success text-white font-semibold rounded-lg hover:bg-status-success/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? 'Processing...' : (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" /> Approve Goals
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleAction('rejected')}
+                    disabled={isSaving || !feedbackText.trim()}
+                    className="flex-1 px-4 py-2 bg-destructive text-white font-semibold rounded-lg hover:bg-destructive/90 transition-colors duration-200 shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {isSaving ? 'Processing...' : (
+                      <>
+                        <MessageCircle className="w-4 h-4" /> Return for Rework
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </DashboardCard>
           ) : (

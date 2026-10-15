@@ -335,20 +335,38 @@ export const getAuditLogs = async (req, res) => {
 // Manager Dashboard Metrics
 export const getManagerDashboard = async (req, res) => {
   try {
+    // "Team" = every employee and manager except the person looking (there are no reporting lines yet)
+    const me = req.user.id;
+
     const [
       teamCountResult,
       goalsCountResult,
-      pendingCountResult,
+      pendingResult,
       performanceResult,
       statusResult,
       blockedResult
     ] = await Promise.all([
-      query(`SELECT COUNT(*)::int as count FROM public.users WHERE role IN ('employee', 'manager')`),
-      
-      query(`SELECT COUNT(*)::int as count FROM public.goals g JOIN public.goal_submissions gs ON g.submission_id = gs.id WHERE gs.status = 'approved'`),
-      
-      query(`SELECT COUNT(*)::int as count FROM public.goal_submissions WHERE status = 'pending_approval'`),
-      
+      query(`SELECT COUNT(*)::int as count FROM public.users WHERE role IN ('employee', 'manager') AND id <> $1`, [me]),
+
+      query(`SELECT COUNT(*)::int as count FROM public.goals g JOIN public.goal_submissions gs ON g.submission_id = gs.id
+             WHERE gs.status = 'approved' AND gs.user_id <> $1`, [me]),
+
+      // Plans waiting for this manager's decision, oldest first
+      query(`
+        SELECT
+          gs.id,
+          COALESCE(u.name, split_part(u.email, '@', 1)) AS employee,
+          gs.period,
+          COUNT(g.id)::int AS goal_count,
+          MAX(g.created_at) AS submitted_at
+        FROM public.goal_submissions gs
+        JOIN public.users u ON u.id = gs.user_id
+        LEFT JOIN public.goals g ON g.submission_id = gs.id
+        WHERE gs.status = 'pending_approval' AND gs.user_id <> $1
+        GROUP BY gs.id, u.name, u.email, gs.period
+        ORDER BY submitted_at ASC
+      `, [me]),
+
       query(`
         WITH user_scores AS (
           SELECT 
@@ -358,7 +376,7 @@ export const getManagerDashboard = async (req, res) => {
           LEFT JOIN public.goal_submissions gs ON gs.user_id = u.id AND gs.status = 'approved'
           LEFT JOIN public.goals g ON g.submission_id = gs.id
           LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
-          WHERE u.role IN ('employee', 'manager')
+          WHERE u.role IN ('employee', 'manager') AND u.id <> $1
           GROUP BY u.id
           -- Only score people who have actually checked in; otherwise they'd count as 0%
           HAVING COUNT(gc.id) > 0
@@ -369,7 +387,7 @@ export const getManagerDashboard = async (req, res) => {
           SUM(CASE WHEN avg_score >= 80 AND avg_score < 90 THEN 1 ELSE 0 END)::int as good_count,
           SUM(CASE WHEN avg_score < 80 THEN 1 ELSE 0 END)::int as needs_improvement_count
         FROM user_scores
-      `),
+      `, [me]),
       
       query(`
         SELECT 
@@ -381,10 +399,10 @@ export const getManagerDashboard = async (req, res) => {
           END as status,
           COUNT(g.id)::int as count
         FROM public.goals g
-        JOIN public.goal_submissions gs ON g.submission_id = gs.id AND gs.status = 'approved'
+        JOIN public.goal_submissions gs ON g.submission_id = gs.id AND gs.status = 'approved' AND gs.user_id <> $1
         LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
         GROUP BY 1
-      `),
+      `, [me]),
 
       // Goals employees have flagged as Blocked, with their reason (most recent first)
       query(`
@@ -399,14 +417,14 @@ export const getManagerDashboard = async (req, res) => {
         JOIN public.goals g ON g.id = gc.goal_id
         JOIN public.goal_submissions gs ON gs.id = g.submission_id AND gs.status = 'approved'
         JOIN public.users u ON u.id = gs.user_id
-        WHERE gc.progress_status = 'Blocked'
+        WHERE gc.progress_status = 'Blocked' AND gs.user_id <> $1
         ORDER BY gc.updated_at DESC
-      `)
+      `, [me])
     ]);
 
     const teamMembers = teamCountResult.rows[0]?.count || 0;
     const activeGoals = goalsCountResult.rows[0]?.count || 0;
-    const approvalsPending = pendingCountResult.rows[0]?.count || 0;
+    const pendingApprovals = pendingResult.rows;
     
     const perfData = performanceResult.rows[0] || { team_score: 0, excellent_count: 0, good_count: 0, needs_improvement_count: 0 };
     const teamScore = perfData.team_score || 0;
@@ -436,7 +454,8 @@ export const getManagerDashboard = async (req, res) => {
     res.json({
       teamMembers,
       activeGoals,
-      approvalsPending,
+      approvalsPending: pendingApprovals.length,
+      pendingApprovals,
       teamScore,
       performanceDistribution,
       goalStatusBreakdown,

@@ -9,7 +9,11 @@ export const getPendingApprovals = async (req, res) => {
     const submissionsResult = await query(
       `SELECT 
          gs.id, gs.user_id as employee_id, gs.period, gs.status, gs.created_at,
-         u.name as employee_name, u.email as employee_email
+         u.name as employee_name, u.email as employee_email,
+         -- If this plan was returned for rework before, what the manager said last time
+         (SELECT a.remarks FROM public.approvals a
+          WHERE a.submission_id = gs.id AND a.approval_action = 'rejected'
+          ORDER BY a.created_at DESC LIMIT 1) AS previous_remarks
        FROM public.goal_submissions gs
        JOIN public.users u ON gs.user_id = u.id
        WHERE gs.status = 'pending_approval' AND gs.user_id <> $1

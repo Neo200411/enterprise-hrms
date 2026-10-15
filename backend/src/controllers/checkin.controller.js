@@ -17,9 +17,10 @@ const sortPeriods = (periods) => {
 };
 
 // Shared by the employee and manager views: pick the period, load its approved goals and their check-ins
-const loadCheckins = async ({ requestedPeriod, userId }) => {
-  const ownerFilter = userId ? 'AND gs.user_id = $1' : '';
-  const ownerParams = userId ? [userId] : [];
+// userId: only this person's goals (employee view); excludeUserId: everyone but this person (manager view)
+const loadCheckins = async ({ requestedPeriod, userId, excludeUserId }) => {
+  const ownerFilter = userId ? 'AND gs.user_id = $1' : excludeUserId ? 'AND gs.user_id <> $1' : '';
+  const ownerParams = userId ? [userId] : excludeUserId ? [excludeUserId] : [];
 
   const periodsResult = await query(
     `SELECT DISTINCT gs.period FROM public.goal_submissions gs
@@ -63,10 +64,10 @@ export const getMyCheckins = async (req, res) => {
   }
 };
 
-// Manager: everyone's approved goals and check-ins for one period
+// Manager: the team's approved goals and check-ins for one period (not the manager's own)
 export const getTeamCheckins = async (req, res) => {
   try {
-    res.json(await loadCheckins({ requestedPeriod: req.query.period }));
+    res.json(await loadCheckins({ requestedPeriod: req.query.period, excludeUserId: req.user.id }));
   } catch (error) {
     console.error('Error fetching team checkins:', error);
     res.status(500).json({ error: 'Internal server error' });

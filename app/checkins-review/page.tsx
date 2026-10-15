@@ -111,12 +111,21 @@ export default function CheckinsReviewPage() {
 
   const selectedGroup = groups.find(g => g.employee.id === selectedEmployeeId)
 
-  const getCompletionRate = (group: EmployeeCheckinGroup) => {
-    const total = group.goals.length
-    if (total === 0) return 0
-    const withCheckin = Object.keys(group.checkins).length
-    return Math.round((withCheckin / total) * 100)
+  // Average score across the goals this person has checked in (actual ÷ target, capped at 100%)
+  const getScore = (group: EmployeeCheckinGroup) => {
+    const scores = group.goals
+      .map(goal => {
+        const c = group.checkins[goal.id]
+        return c?.actual_achievement != null && goal.target_value > 0
+          ? Math.min(100, (c.actual_achievement / goal.target_value) * 100)
+          : null
+      })
+      .filter((x): x is number => x !== null)
+    return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null
   }
+
+  const getBlockedCount = (group: EmployeeCheckinGroup) =>
+    Object.values(group.checkins).filter(c => c.progress_status === 'Blocked').length
 
   return (
     <AppLayout>
@@ -124,7 +133,7 @@ export default function CheckinsReviewPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Check-in Reviews</h1>
-            <p className="text-sm text-muted-foreground mt-1">Review team quarterly progress updates</p>
+            <p className="text-sm text-muted-foreground mt-1">See how each person is doing against their approved goals</p>
           </div>
           <div className="flex items-center gap-2">
             {periods.length > 0 && (
@@ -168,31 +177,30 @@ export default function CheckinsReviewPage() {
             {/* Employee List Panel */}
             <div className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
-                <p className="text-sm font-semibold text-foreground">Team Members ({groups.length})</p>
+                <p className="text-sm font-semibold text-foreground">Team ({groups.length}) <span className="font-normal text-muted-foreground">· score</span></p>
               </div>
               <div className="divide-y divide-border overflow-y-auto max-h-[500px]">
                 {groups.map(group => {
-                  const completion = getCompletionRate(group)
+                  const score = getScore(group)
+                  const blocked = getBlockedCount(group)
                   const checkinCount = Object.keys(group.checkins).length
                   const isSelected = group.employee.id === selectedEmployeeId
                   return (
                     <button key={group.employee.id} onClick={() => setSelectedEmployeeId(group.employee.id)}
                       className={`w-full text-left px-4 py-3 transition-colors ${isSelected ? 'bg-primary/10 border-l-2 border-primary' : 'hover:bg-secondary/50 border-l-2 border-transparent'}`}>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className={`text-sm font-medium ${isSelected ? 'text-primary' : 'text-foreground'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className={`text-sm font-medium truncate ${isSelected ? 'text-primary' : 'text-foreground'}`}>
                             {group.employee.name || group.employee.email}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{checkinCount}/{group.goals.length} checked in</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {checkinCount}/{group.goals.length} checked in
+                            {blocked > 0 && <span className="text-red-600 font-medium"> · {blocked} blocked</span>}
+                          </p>
                         </div>
-                        <div className="text-right">
-                          <span className={`text-xs font-bold ${completion === 100 ? 'text-green-600' : completion > 0 ? 'text-blue-600' : 'text-muted-foreground'}`}>
-                            {completion}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-2 bg-border rounded-full h-1">
-                        <div className={`h-1 rounded-full ${completion === 100 ? 'bg-green-500' : 'bg-primary'}`} style={{ width: `${completion}%` }} />
+                        <span className={`text-sm font-bold flex-shrink-0 ${score === null ? 'text-muted-foreground' : score >= 90 ? 'text-green-600' : score >= 80 ? 'text-blue-600' : 'text-amber-600'}`}>
+                          {score === null ? '—' : `${score}%`}
+                        </span>
                       </div>
                     </button>
                   )
@@ -245,7 +253,7 @@ export default function CheckinsReviewPage() {
                           <p className="text-xs text-muted-foreground flex-shrink-0">{goal.weightage}% weight</p>
                         </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 gap-3">
                           <div className="p-2.5 bg-secondary/40 rounded-lg text-center">
                             <p className="text-xs text-muted-foreground">Target</p>
                             <p className="text-sm font-bold text-foreground">{goal.target_value} <span className="text-xs font-normal">{goal.uom_type}</span></p>
@@ -257,10 +265,6 @@ export default function CheckinsReviewPage() {
                           <div className="p-2.5 bg-secondary/40 rounded-lg text-center">
                             <p className="text-xs text-muted-foreground">Progress</p>
                             <p className={`text-sm font-bold ${progress >= 100 ? 'text-green-600' : progress > 50 ? 'text-blue-600' : 'text-foreground'}`}>{checkin ? `${progress}%` : '—'}</p>
-                          </div>
-                          <div className="p-2.5 bg-secondary/40 rounded-lg text-center">
-                            <p className="text-xs text-muted-foreground">Period</p>
-                            <p className="text-sm font-bold text-foreground">{selectedPeriod}</p>
                           </div>
                         </div>
 
