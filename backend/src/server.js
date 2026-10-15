@@ -57,13 +57,23 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-app.listen(port, async () => {
+// Express 5 passes startup errors (e.g. port already in use) to this callback
+app.listen(port, async (error) => {
+  if (error) {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${port} is already in use — is the API already running in another terminal?`);
+    } else {
+      console.error(`Failed to start server: ${error.message}`);
+    }
+    process.exit(1);
+  }
+
   console.log(`Server is running on port ${port}`);
   try {
     await pool.query('SELECT 1');
     console.log('Database connection OK');
-  } catch (error) {
-    console.error(`Database connection FAILED: ${error.message}`);
-    console.error('Check DATABASE_URL in backend/.env (is the Supabase project paused or deleted?)');
+  } catch (dbError) {
+    console.error(`Database connection FAILED: ${dbError.message}`);
+    console.error('Check DATABASE_URL in backend/.env and that PostgreSQL is running.');
   }
 });
