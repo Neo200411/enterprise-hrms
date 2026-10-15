@@ -60,6 +60,15 @@ Rules the **server** enforces (not just the form):
 - If a manager edits weightages, the total must still be 100% before approving.
 - The approval runs in a **database transaction** with a row lock, so the status update, the approvals record and any edits either all save or none do — and two managers can't approve the same submission at once.
 
+### AI goal assistant (optional)
+
+Each goal in the form has an **✨ Improve with AI** button. It sends what the employee typed to `POST /api/ai/improve-goal`; the backend asks **Groq** (Llama 3.3, OpenAI-compatible API) to rewrite it as one clear, measurable goal and to reply in **JSON mode** with exactly the form's fields.
+
+- The prompt tells the model that progress is scored as actual ÷ target, so it turns "reduce X" goals into "higher is better" goals.
+- The backend **never trusts the answer blindly**: values outside the form's options are replaced, titles are trimmed, and targets must be positive.
+- The API key lives only in `backend/.env`; the browser never sees it. Each person can use it 20 times per 15 minutes.
+- It only *suggests* — weightage is untouched, the employee edits freely, and all normal submission rules still apply. If no key is set or Groq fails, the button shows a message and nothing else changes.
+
 ### Quarterly check-ins
 
 Goals are planned for one period (e.g. "Q4 2026"), so each approved goal gets **one check-in, for its own quarter**. The Check-in page shows a tab for each period that has approved goals (newest first). The employee enters the actual achievement and a status (Not Started / On Track / Blocked / Completed). The server works out the quarter from the goal's period — the browser can't choose it. Saving again updates the same row (`INSERT … ON CONFLICT (goal_id, quarter) DO UPDATE`).
@@ -93,6 +102,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | GET | `/api/reports/manager-dashboard` | Manager, Admin |
 | GET | `/api/reports/admin-dashboard` · `/export` · `/audit-logs` | Admin |
 | GET · PUT | `/api/users` · `/api/users/:id/name` (People page) | Admin |
+| POST | `/api/ai/improve-goal` | Signed in (rate-limited) |
 
 ## 5. Security
 
@@ -117,5 +127,6 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Approval transaction | `backend/src/controllers/approval.controller.js` |
 | Dashboard SQL | `backend/src/controllers/reports.controller.js` |
 | Goal form + Zod | `components/goals/goal-form.tsx`, `lib/validations/goal-schema.ts` |
+| AI goal assistant | `backend/src/controllers/ai.controller.js` |
 | Route protection in the UI | `components/providers/auth-provider.tsx` |
 | CSV export | `lib/export.ts` |

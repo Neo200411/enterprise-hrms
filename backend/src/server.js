@@ -8,6 +8,7 @@ import approvalRoutes from './routes/approval.routes.js';
 import checkinRoutes from './routes/checkin.routes.js';
 import reportRoutes from './routes/reports.routes.js';
 import userRoutes from './routes/user.routes.js';
+import aiRoutes from './routes/ai.routes.js';
 
 if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
   console.error('FATAL ERROR: JWT_SECRET must be set to a random string of at least 32 characters.');
@@ -33,6 +34,7 @@ app.use('/api/approvals', approvalRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.get('/health', async (req, res) => {
   try {

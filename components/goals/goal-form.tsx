@@ -2,7 +2,7 @@
 
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Plus, Trash2, Save, Send, AlertCircle } from 'lucide-react'
+import { Plus, Trash2, Save, Send, AlertCircle, Sparkles } from 'lucide-react'
 import { goalSubmissionSchema, GoalSubmission } from '@/lib/validations/goal-schema'
 import DashboardCard from '../dashboard/dashboard-card'
 import { useAuth } from '../providers/auth-provider'
@@ -53,6 +53,8 @@ export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods
   const { user } = useAuth()
   const { toast } = useToast()
   const [isSubmitting, setIsSubmitting] = useState(false)
+  // Index of the goal the AI assistant is currently rewriting
+  const [improvingIndex, setImprovingIndex] = useState<number | null>(null)
   const [globalError, setGlobalError] = useState<string | null>(null)
 
   const {
@@ -92,6 +94,29 @@ export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods
   })
 
   const totalWeightage = watchedGoals?.reduce((sum, goal) => sum + (Number(goal.weightage) || 0), 0) || 0
+
+  // Ask the AI to turn what's typed so far into a clear, measurable goal. Weightage is left alone.
+  const improveWithAI = async (index: number) => {
+    const goal = getValues(`goals.${index}`)
+    if (!goal.goal_title?.trim() && !goal.description?.trim()) {
+      toast('Type a rough goal title or description first', 'warning')
+      return
+    }
+
+    setImprovingIndex(index)
+    try {
+      const { suggestion } = await api.improveGoal({ goal_title: goal.goal_title, description: goal.description })
+      const fields = ['goal_title', 'description', 'thrust_area', 'uom_type', 'measurement_type', 'target_value'] as const
+      for (const field of fields) {
+        setValue(`goals.${index}.${field}`, suggestion[field], { shouldValidate: true, shouldDirty: true })
+      }
+      toast('AI suggestion added — review it and edit anything you like', 'success')
+    } catch (err: any) {
+      toast(err.message || 'The AI assistant could not help right now', 'error')
+    } finally {
+      setImprovingIndex(null)
+    }
+  }
 
   const onSubmit = async (data: GoalSubmission, action: 'draft' | 'pending_approval') => {
     if (!user) return
@@ -189,19 +214,31 @@ export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods
             <div key={field.id} className="p-4 bg-card border border-border rounded-lg shadow-sm relative">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-semibold text-foreground">Goal #{index + 1}</h3>
-                {fields.length > 1 && (
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      remove(index)
-                      setTimeout(() => trigger(), 0)
-                    }}
-                    className="text-destructive hover:bg-destructive/10 p-1 rounded transition-colors"
-                    title="Remove Goal"
+                    onClick={() => improveWithAI(index)}
+                    disabled={improvingIndex !== null || isSubmitting}
+                    className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg text-primary bg-primary/10 hover:bg-primary/20 transition-colors disabled:opacity-50"
+                    title="Rewrite this goal as a clear, measurable goal"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Sparkles className={`w-3.5 h-3.5 ${improvingIndex === index ? 'animate-spin' : ''}`} />
+                    {improvingIndex === index ? 'Improving...' : 'Improve with AI'}
                   </button>
-                )}
+                  {fields.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        remove(index)
+                        setTimeout(() => trigger(), 0)
+                      }}
+                      className="text-destructive hover:bg-destructive/10 p-1 rounded transition-colors"
+                      title="Remove Goal"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">

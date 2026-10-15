@@ -67,4 +67,8 @@ export const api = {
   getUsers: () => request('/users'),
   updateUserName: (userId: string, name: string) =>
     request(`/users/${userId}/name`, { method: 'PUT', body: { name } }),
+
+  // --- AI assistant ---
+  improveGoal: (draft: { goal_title?: string; description?: string }) =>
+    request('/ai/improve-goal', { method: 'POST', body: draft }),
 }

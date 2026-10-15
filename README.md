@@ -2,7 +2,7 @@
 
 A full-stack HRMS for **goal management and quarterly performance tracking**, with separate dashboards for Employees, Managers and Admins.
 
-- **Employees** plan goals for a quarter, submit them for approval, and record quarterly check-ins.
+- **Employees** plan goals for a quarter (with an optional ✨ AI assistant that turns a rough idea into a measurable goal), submit them for approval, and record quarterly check-ins.
 - **Managers** review submissions, adjust targets/weightage, approve or return them for rework, and track team progress.
 - **Admins** see organisation-wide analytics, the audit log, manage people's names, and export reports to CSV.
 
@@ -18,6 +18,7 @@ How it works end to end — tables, workflows, API — is in **[docs/ARCHITECTUR
 | Backend | Node.js + Express REST API |
 | Database | PostgreSQL (5 tables) |
 | Auth | JWT + bcrypt password hashing, role-based access control |
+| AI (optional) | Groq API (Llama 3.3) for the goal-writing assistant |
 
 ## Project Structure
 
@@ -32,7 +33,7 @@ backend/
   db/schema.sql       The 5 tables
   db/setup.js         Creates tables + demo users
   src/server.js       Express app
-  src/routes/         auth · goals · approvals · checkins · reports · users
+  src/routes/         auth · goals · approvals · checkins · reports · users · ai
   src/controllers/    Business logic + SQL for each route group
   src/middleware/     JWT auth, role checks, rate limiting
 ```
@@ -54,6 +55,14 @@ DATABASE_SSL=false
 JWT_SECRET=<random string, 32+ characters>
 PORT=5001
 ```
+
+Optional — the **✨ Improve with AI** button in the goal form needs a free Groq key from https://console.groq.com/keys:
+
+```env
+GROQ_API_KEY=gsk_...
+```
+
+Without it, everything else works and the button just says the assistant isn't set up.
 
 Generate a secret with `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"`.
 Any PostgreSQL works — local, Supabase, Neon, RDS — just change `DATABASE_URL` (and set `DATABASE_SSL=true` for hosted databases).
