@@ -34,6 +34,7 @@ interface EmployeeSubmission {
 export default function ApprovalsPage() {
   const { toast } = useToast()
   const [submissions, setSubmissions] = useState<EmployeeSubmission[]>([])
+  const [counts, setCounts] = useState({ approved: 0, rejected: 0 })
   const [selectedSubmission, setSelectedSubmission] = useState<EmployeeSubmission | null>(null)
   const [feedbackText, setFeedbackText] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -55,6 +56,7 @@ export default function ApprovalsPage() {
     setError(null)
     try {
       const data = await api.getPendingApprovals()
+      if (data?.counts) setCounts(data.counts)
       if (data && data.submissions) {
         setSubmissions(data.submissions)
         setSelectedSubmission(prev => {
@@ -181,9 +183,9 @@ export default function ApprovalsPage() {
           <div className="flex items-end justify-between">
             <div>
               <p className="text-4xl font-bold text-status-success">
-                {submissions.filter((s) => s.status === 'approved').length}
+                {counts.approved}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">Team goals locked</p>
+              <p className="text-sm text-muted-foreground mt-2">Goal plans approved</p>
             </div>
             <div className="text-status-success/30">
               <CheckCircle2 className="w-12 h-12" />
@@ -195,9 +197,9 @@ export default function ApprovalsPage() {
           <div className="flex items-end justify-between">
             <div>
               <p className="text-4xl font-bold text-destructive">
-                {submissions.filter((s) => s.status === 'rejected').length}
+                {counts.rejected}
               </p>
-              <p className="text-sm text-muted-foreground mt-2">Needs revisions</p>
+              <p className="text-sm text-muted-foreground mt-2">Waiting on employee edits</p>
             </div>
             <div className="text-destructive/30">
               <XCircle className="w-12 h-12" />

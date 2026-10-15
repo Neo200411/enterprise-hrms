@@ -17,8 +17,19 @@ export const getPendingApprovals = async (req, res) => {
       [req.user.id]
     );
 
+    // Totals for the summary cards (everyone's submissions except the reviewer's own)
+    const countsResult = await query(
+      `SELECT
+         COUNT(*) FILTER (WHERE status = 'approved')::int AS approved,
+         COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+       FROM public.goal_submissions
+       WHERE user_id <> $1`,
+      [req.user.id]
+    );
+    const counts = countsResult.rows[0];
+
     if (submissionsResult.rows.length === 0) {
-      return res.json({ submissions: [] });
+      return res.json({ submissions: [], counts });
     }
 
     const submissionIds = submissionsResult.rows.map(s => s.id);
@@ -37,7 +48,7 @@ export const getPendingApprovals = async (req, res) => {
       };
     });
 
-    res.json({ submissions });
+    res.json({ submissions, counts });
   } catch (error) {
     console.error('Error fetching pending approvals:', error);
     res.status(500).json({ error: 'Internal server error' });

@@ -3,37 +3,53 @@
 import AppLayout from '@/components/layout/app-layout'
 import DashboardCard from '@/components/dashboard/dashboard-card'
 import { useEffect, useState } from 'react'
-import { AlertCircle, FileText, CheckCircle2, Download } from 'lucide-react'
+import { AlertCircle, FileText, CheckCircle2, Download, MessageCircle } from 'lucide-react'
 import { toCsv, downloadCsv } from '@/lib/export'
 import GoalForm from '@/components/goals/goal-form'
 import { useAuth } from '@/components/providers/auth-provider'
 import { api } from '@/services/api'
-import { GoalSubmission } from '@/lib/validations/goal-schema'
+import { GoalItem } from '@/lib/validations/goal-schema'
+
+type Status = 'draft' | 'pending_approval' | 'approved' | 'rejected'
+
+interface Submission {
+  period: string
+  status: Status
+  managerRemarks: string | null
+  goals: GoalItem[]
+}
+
+const STATUS_COLORS: Record<Status, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  pending_approval: 'bg-status-pending/10 text-status-pending',
+  approved: 'bg-status-success/10 text-status-success',
+  rejected: 'bg-destructive/10 text-destructive',
+}
+
+const STATUS_LABELS: Record<Status, string> = {
+  draft: 'Draft',
+  pending_approval: 'Pending Approval',
+  approved: 'Approved',
+  rejected: 'Needs Revision',
+}
 
 export default function GoalsPage() {
   const { user } = useAuth()
-  const [submission, setSubmission] = useState<GoalSubmission | null>(null)
+  const [submissions, setSubmissions] = useState<Submission[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [usedPeriods, setUsedPeriods] = useState<string[]>([])
   const [isPlanningNew, setIsPlanningNew] = useState(false)
 
-  const fetchSubmission = async () => {
+  const fetchSubmissions = async () => {
     if (!user) return
     setIsLoading(true)
-    
     try {
       const response = await api.getGoals()
-      setUsedPeriods((response.submissions || []).map((s: any) => s.period))
-      setIsPlanningNew(false)
-
-      if (response.submissions && response.submissions.length > 0) {
-        // Find the overall status based on the first submission
-        const currentSubmission = response.submissions[0]
-        
-        setSubmission({
-          period: currentSubmission.period || 'Current Goals',
-          status: currentSubmission.status as any,
-          goals: currentSubmission.goals.map((g: any) => ({
+      setSubmissions(
+        (response.submissions || []).map((s: any) => ({
+          period: s.period,
+          status: s.status,
+          managerRemarks: s.manager_remarks,
+          goals: s.goals.map((g: any) => ({
             id: g.id,
             thrust_area: g.thrust_area,
             goal_title: g.goal_title,
@@ -42,49 +58,29 @@ export default function GoalsPage() {
             measurement_type: g.measurement_type,
             target_value: g.target_value,
             weightage: g.weightage,
-          }))
-        })
-      } else {
-        setSubmission(null)
-      }
+          })),
+        }))
+      )
+      setIsPlanningNew(false)
     } catch (err) {
-      console.error('Error fetching submission:', err)
+      console.error('Error fetching goals:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchSubmission()
+    fetchSubmissions()
   }, [user])
 
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      'draft': 'bg-muted text-muted-foreground',
-      'pending_approval': 'bg-status-pending/10 text-status-pending',
-      'approved': 'bg-status-success/10 text-status-success',
-      'rejected': 'bg-destructive/10 text-destructive',
-    }
-    return colors[status] || 'bg-muted text-muted-foreground'
-  }
-
-  const getStatusLabel = (status: string) => {
-    const labels: Record<string, string> = {
-      'draft': 'Draft',
-      'pending_approval': 'Pending Approval',
-      'approved': 'Approved',
-      'rejected': 'Needs Revision',
-    }
-    return labels[status] || status
-  }
+  // A draft or a submission returned for rework is the one the employee can still edit
+  const editable = submissions.find(s => s.status === 'draft' || s.status === 'rejected')
+  const locked = submissions.filter(s => s !== editable)
 
   const handleExport = () => {
-    if (!submission) return
-    const rows = submission.goals.map(g => ({
-      ...g,
-      status: submission.status,
-      period: submission.period,
-    }))
+    const rows = submissions.flatMap(s =>
+      s.goals.map(g => ({ ...g, period: s.period, status: STATUS_LABELS[s.status] }))
+    )
     const columns = [
       { key: 'period', label: 'Period' },
       { key: 'status', label: 'Status' },
@@ -101,20 +97,31 @@ export default function GoalsPage() {
 
   return (
     <AppLayout>
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-8 flex items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-foreground mb-2">My Goals</h1>
           <p className="text-muted-foreground">Track and manage your quarterly objectives</p>
         </div>
-        {submission && submission.goals.length > 0 && (
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground text-sm font-medium rounded-lg hover:bg-secondary transition-colors"
-          >
-            <Download className="w-4 h-4" />
-            Export CSV
-          </button>
-        )}
+        <div className="flex gap-2">
+          {submissions.length > 0 && (
+            <button
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-2 bg-card border border-border text-foreground text-sm font-medium rounded-lg hover:bg-secondary transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Export CSV
+            </button>
+          )}
+          {/* Only one plan can be open for editing at a time */}
+          {!isLoading && !editable && !isPlanningNew && submissions.length > 0 && (
+            <button
+              onClick={() => setIsPlanningNew(true)}
+              className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Plan Next Period
+            </button>
+          )}
+        </div>
       </div>
 
       {isLoading ? (
@@ -122,21 +129,33 @@ export default function GoalsPage() {
           <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
         </div>
       ) : (
-        <>
-          {isPlanningNew ? (
+        <div className="space-y-8">
+          {/* Editable plan: a draft, one returned for rework, a brand-new period, or the very first plan */}
+          {editable ? (
+            <div className="space-y-4">
+              {editable.status === 'rejected' && (
+                <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20 flex gap-3">
+                  <MessageCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-foreground">Your manager returned these goals for rework</p>
+                    <p className="text-sm text-muted-foreground mt-1">“{editable.managerRemarks || 'No remarks given'}”</p>
+                  </div>
+                </div>
+              )}
+              <GoalForm initialData={editable} onSuccess={fetchSubmissions} />
+            </div>
+          ) : (isPlanningNew || submissions.length === 0) && (
             <GoalForm
               initialData={null}
-              usedPeriods={usedPeriods}
-              onSuccess={fetchSubmission}
-              onCancel={() => setIsPlanningNew(false)}
+              usedPeriods={submissions.map(s => s.period)}
+              onSuccess={fetchSubmissions}
+              onCancel={submissions.length > 0 ? () => setIsPlanningNew(false) : undefined}
             />
-          ) : (!submission || submission.status === 'draft' || submission.status === 'rejected') ? (
-            <GoalForm 
-              initialData={submission} 
-              onSuccess={fetchSubmission} 
-            />
-          ) : (
-            <div className="space-y-6">
+          )}
+
+          {/* Submitted plans (pending or approved) are read-only */}
+          {locked.map(submission => (
+            <div key={submission.period} className="space-y-4">
               <div className="flex items-center gap-4 p-4 bg-card border border-border rounded-lg shadow-sm">
                 <div className={`p-2 rounded-full ${submission.status === 'approved' ? 'bg-status-success/20 text-status-success' : 'bg-status-pending/20 text-status-pending'}`}>
                   {submission.status === 'approved' ? <CheckCircle2 className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
@@ -144,18 +163,15 @@ export default function GoalsPage() {
                 <div className="flex-1">
                   <h3 className="font-semibold text-foreground text-lg">Goal Submission - {submission.period}</h3>
                   <p className="text-sm text-muted-foreground flex items-center gap-2">
-                    Status: 
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${getStatusColor(submission.status)}`}>
-                      {getStatusLabel(submission.status)}
+                    Status:
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${STATUS_COLORS[submission.status]}`}>
+                      {STATUS_LABELS[submission.status]}
                     </span>
                   </p>
+                  {submission.status === 'approved' && submission.managerRemarks && (
+                    <p className="text-sm text-muted-foreground mt-1">Manager: “{submission.managerRemarks}”</p>
+                  )}
                 </div>
-                <button
-                  onClick={() => setIsPlanningNew(true)}
-                  className="px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  Plan Next Period
-                </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -166,17 +182,14 @@ export default function GoalsPage() {
                         <p className="text-xs text-muted-foreground uppercase font-medium">Thrust Area</p>
                         <p className="text-sm font-medium text-foreground">{goal.thrust_area}</p>
                       </div>
-                      
                       <div>
                         <p className="text-xs text-muted-foreground uppercase font-medium">Title</p>
                         <p className="text-sm text-foreground">{goal.goal_title}</p>
                       </div>
-
                       <div>
                         <p className="text-xs text-muted-foreground uppercase font-medium">Description</p>
                         <p className="text-sm text-muted-foreground">{goal.description}</p>
                       </div>
-
                       <div className="grid grid-cols-2 gap-2 pt-3 border-t border-border">
                         <div>
                           <p className="text-xs text-muted-foreground">Target</p>
@@ -194,8 +207,8 @@ export default function GoalsPage() {
                 ))}
               </div>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
 
       {/* Info Banner */}

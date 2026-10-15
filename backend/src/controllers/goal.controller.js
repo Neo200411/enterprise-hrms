@@ -8,12 +8,15 @@ const MIN_WEIGHTAGE = 10;
 export const getMyGoals = async (req, res) => {
   try {
     const userId = req.user.id;
-    // According to schema: goal_submissions(id, user_id, period, status)
-    // and goals(id, submission_id, thrust_area, ...)
-    
-    // We fetch submissions and their associated goals
+    // Each submission with the manager's most recent decision (so employees can see rework remarks)
     const submissionsResult = await query(
-      'SELECT id, period, status FROM public.goal_submissions WHERE user_id = $1 ORDER BY created_at DESC',
+      `SELECT gs.id, gs.period, gs.status,
+              (SELECT a.remarks FROM public.approvals a
+               WHERE a.submission_id = gs.id
+               ORDER BY a.created_at DESC LIMIT 1) AS manager_remarks
+       FROM public.goal_submissions gs
+       WHERE gs.user_id = $1
+       ORDER BY gs.created_at DESC`,
       [userId]
     );
 

@@ -147,7 +147,7 @@ export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods
   }
 
   return (
-    <DashboardCard title="Create New Goals" className="bg-accent/5 border-accent">
+    <DashboardCard title={initialData?.period ? `Edit Goals — ${initialData.period}` : "Create New Goals"} className="bg-accent/5 border-accent">
       <form className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="w-1/3">

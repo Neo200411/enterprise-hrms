@@ -26,7 +26,8 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
     const baseItems = [
       {
         label: 'Dashboard',
-        href: '/',
+        // Each role has its own dashboard; the admin's is the organisation-wide Analytics page
+        href: userRole === 'admin' ? '/admin/analytics' : userRole === 'manager' ? '/dashboard-manager' : '/',
         icon: <BarChart3 className="w-5 h-5" />,
       },
       {
@@ -55,11 +56,6 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
     ]
 
     const adminItems = [
-      {
-        label: 'Analytics',
-        href: '/admin/analytics',
-        icon: <BarChart3 className="w-5 h-5" />,
-      },
       {
         label: 'Audit Logs',
         href: '/admin/logs',

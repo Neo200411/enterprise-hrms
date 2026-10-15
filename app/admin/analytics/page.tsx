@@ -185,7 +185,7 @@ export default function AnalyticsDashboard() {
         )}
 
         {/* Live KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <StatCard label="Total Employees" value={kpis.totalEmployees} icon={Users} color="bg-blue-50 text-blue-600 dark:bg-blue-950/20 dark:text-blue-400" loading={isLoading} />
           <StatCard label="Total Goals" value={kpis.totalGoals} icon={Target} color="bg-purple-50 text-purple-600 dark:bg-purple-950/20 dark:text-purple-400" loading={isLoading} />
           <StatCard label="Approved Goals" value={kpis.approvedGoals} icon={CheckCircle2} color="bg-green-50 text-green-600 dark:bg-green-950/20 dark:text-green-400" loading={isLoading} />

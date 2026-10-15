@@ -1,6 +1,10 @@
 import { query } from '../config/db.js';
 
-// Read-only reporting endpoints: dashboards for each role, CSV export and the audit log. Everything here is computed from the 5 core tables.
+// Read-only reporting endpoints: dashboards for each role, CSV export and the audit log.
+// Everything here is computed from the 5 core tables.
+//
+// Score for one goal = actual ÷ target × 100, capped at 100. Goals without a check-in are skipped
+// (note: Postgres LEAST() ignores NULLs, so LEAST(NULL, 100) would wrongly return 100).
 
 export const getEmployeeDashboard = async (req, res) => {
   try {
@@ -17,7 +21,7 @@ export const getEmployeeDashboard = async (req, res) => {
           COUNT(DISTINCT CASE WHEN gs.status = 'approved' THEN g.id END)::int as active_goals,
           COUNT(DISTINCT CASE WHEN gs.status = 'approved' AND LOWER(gc.progress_status) = 'completed' THEN g.id END)::int as completed_goals,
           COUNT(DISTINCT CASE WHEN gs.status = 'pending_approval' THEN g.id END)::int as pending_goals,
-          LEAST(ROUND(COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0)), 100)::int as performance_score
+          LEAST(ROUND(COALESCE(AVG(CASE WHEN gc.actual_achievement IS NOT NULL AND g.target_value > 0 THEN LEAST(gc.actual_achievement / g.target_value * 100, 100) END), 0)), 100)::int as performance_score
         FROM public.goal_submissions gs
         LEFT JOIN public.goals g ON g.submission_id = gs.id
         LEFT JOIN public.goal_checkins gc ON gc.goal_id = g.id
@@ -44,9 +48,9 @@ export const getEmployeeDashboard = async (req, res) => {
           LEAST(ROUND(COALESCE(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 0)), 100)::int as achievement_pct,
           CASE 
             WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
-            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'In Progress'
+            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'On Track'
             WHEN LOWER(gc.progress_status) = 'blocked' THEN 'Blocked'
-            ELSE 'Pending'
+            ELSE 'Not Started'
           END as progress_status,
           gc.created_at
         FROM public.goal_checkins gc
@@ -120,8 +124,8 @@ export const getAdminDashboard = async (req, res) => {
       query(`
         SELECT
           gs.period AS quarter,
-          SUM(LEAST(gc.actual_achievement, g.target_value)) AS sum_actual,
-          SUM(g.target_value) AS sum_target
+          SUM(LEAST(gc.actual_achievement, g.target_value)) FILTER (WHERE gc.actual_achievement IS NOT NULL) AS sum_actual,
+          SUM(g.target_value) FILTER (WHERE gc.actual_achievement IS NOT NULL) AS sum_target
         FROM public.goal_checkins gc
         JOIN public.goals g ON gc.goal_id = g.id
         JOIN public.goal_submissions gs ON g.submission_id = gs.id
@@ -348,7 +352,7 @@ export const getManagerDashboard = async (req, res) => {
         WITH user_scores AS (
           SELECT 
             u.id,
-            COALESCE(AVG(LEAST(gc.actual_achievement / NULLIF(g.target_value, 0) * 100, 100)), 0) as avg_score
+            COALESCE(AVG(CASE WHEN gc.actual_achievement IS NOT NULL AND g.target_value > 0 THEN LEAST(gc.actual_achievement / g.target_value * 100, 100) END), 0) as avg_score
           FROM public.users u
           LEFT JOIN public.goal_submissions gs ON gs.user_id = u.id AND gs.status = 'approved'
           LEFT JOIN public.goals g ON g.submission_id = gs.id
@@ -370,9 +374,9 @@ export const getManagerDashboard = async (req, res) => {
         SELECT 
           CASE 
             WHEN LOWER(gc.progress_status) = 'completed' THEN 'Completed'
-            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'In Progress'
+            WHEN LOWER(gc.progress_status) IN ('in progress', 'in_progress', 'on track', 'on_track') THEN 'On Track'
             WHEN LOWER(gc.progress_status) = 'blocked' THEN 'Blocked'
-            ELSE 'Pending'
+            ELSE 'Not Started'
           END as status,
           COUNT(g.id)::int as count
         FROM public.goals g
@@ -405,9 +409,9 @@ export const getManagerDashboard = async (req, res) => {
     }, {});
 
     const goalStatusBreakdown = [
-      { status: 'In Progress', count: rawStatusCounts['In Progress'] || 0, color: 'bg-primary' },
+      { status: 'On Track', count: rawStatusCounts['On Track'] || 0, color: 'bg-primary' },
       { status: 'Completed', count: rawStatusCounts['Completed'] || 0, color: 'bg-status-success' },
-      { status: 'Pending', count: rawStatusCounts['Pending'] || 0, color: 'bg-status-pending' },
+      { status: 'Not Started', count: rawStatusCounts['Not Started'] || 0, color: 'bg-status-pending' },
       { status: 'Blocked', count: rawStatusCounts['Blocked'] || 0, color: 'bg-destructive' }
     ];
 
