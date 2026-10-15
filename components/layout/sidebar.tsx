@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, X, BarChart3, Users, Target, CheckCircle2, Clock, Settings, LogOut, CalendarCheck } from 'lucide-react'
+import { Menu, X, BarChart3, Target, CheckCircle2, Clock, Settings, LogOut, CalendarCheck } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '../providers/auth-provider'
 
@@ -43,11 +43,6 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
 
     const managerItems = [
       {
-        label: 'Team Members',
-        href: '/team',
-        icon: <Users className="w-5 h-5" />,
-      },
-      {
         label: 'Approvals',
         href: '/approvals',
         icon: <CheckCircle2 className="w-5 h-5" />,
@@ -60,11 +55,6 @@ export default function Sidebar({ userRole = 'employee' }: SidebarProps) {
     ]
 
     const adminItems = [
-      {
-        label: 'All Employees',
-        href: '/admin/employees',
-        icon: <Users className="w-5 h-5" />,
-      },
       {
         label: 'Analytics',
         href: '/admin/analytics',

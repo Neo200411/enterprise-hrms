@@ -55,9 +55,7 @@ export const api = {
   // --- Reports & dashboards ---
   getEmployeeDashboard: () => request('/reports/employee-dashboard'),
   getManagerDashboard: () => request('/reports/manager-dashboard'),
-  getTeamMembers: (page = 1, limit = 10) => request(`/reports/team?page=${page}&limit=${limit}`),
   getAnalyticsDashboard: () => request('/reports/admin-dashboard'),
-  getEmployees: () => request('/reports/employees'),
   exportAnalytics: () => request('/reports/export'),
   getAuditLogs: (limit = 100) => request(`/reports/audit-logs?limit=${limit}`),
 }

@@ -73,7 +73,7 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | Who | Report |
 |---|---|
 | Employee | Active / completed / pending goals, own score, recent check-ins |
-| Manager | Team size, pending approvals, team score, performance distribution, goal status breakdown, team list |
+| Manager | Team size, pending approvals, team score, performance distribution, goal status breakdown |
 | Admin | Org KPIs, status pie chart, quarter-on-quarter trend, approval turnaround, goals pending > 7 days, audit log, CSV export |
 
 ## 4. API
@@ -88,8 +88,8 @@ All dashboards are **calculated live with SQL** from the 5 tables (joins, `GROUP
 | GET · POST | `/api/checkins/my-checkins?quarter=Q1` · `/api/checkins` | Signed in |
 | GET | `/api/checkins/team?quarter=Q1` | Manager, Admin |
 | GET | `/api/reports/employee-dashboard` | Signed in |
-| GET | `/api/reports/manager-dashboard` · `/api/reports/team` | Manager, Admin |
-| GET | `/api/reports/admin-dashboard` · `/employees` · `/export` · `/audit-logs` | Admin |
+| GET | `/api/reports/manager-dashboard` | Manager, Admin |
+| GET | `/api/reports/admin-dashboard` · `/export` · `/audit-logs` | Admin |
 
 ## 5. Security
 

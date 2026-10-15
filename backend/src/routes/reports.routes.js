@@ -4,8 +4,6 @@ import {
   getEmployeeDashboard,
   getManagerDashboard,
   getAdminDashboard,
-  getTeamMembers,
-  getAllEmployees,
   exportGoalsData,
   getAuditLogs,
 } from '../controllers/reports.controller.js';
@@ -20,11 +18,9 @@ router.get('/employee-dashboard', getEmployeeDashboard);
 
 // Manager (admins can see manager views too)
 router.get('/manager-dashboard', authorize(['manager', 'admin']), getManagerDashboard);
-router.get('/team', authorize(['manager', 'admin']), getTeamMembers);
 
 // Admin
 router.get('/admin-dashboard', authorize(['admin']), getAdminDashboard);
-router.get('/employees', authorize(['admin']), getAllEmployees);
 router.get('/export', authorize(['admin']), exportGoalsData);
 router.get('/audit-logs', authorize(['admin']), getAuditLogs);
 

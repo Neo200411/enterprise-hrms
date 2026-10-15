@@ -35,7 +35,6 @@ export const useAuth = () => useContext(AuthContext)
 const ROUTE_ROLES: { prefix: string; roles: Role[] }[] = [
   { prefix: '/admin', roles: ['admin'] },
   { prefix: '/approvals', roles: ['manager', 'admin'] },
-  { prefix: '/team', roles: ['manager', 'admin'] },
   { prefix: '/checkins-review', roles: ['manager', 'admin'] },
   { prefix: '/dashboard-manager', roles: ['manager', 'admin'] },
 ]
