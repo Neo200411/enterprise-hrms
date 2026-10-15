@@ -69,6 +69,13 @@ export const api = {
     request(`/users/${userId}/name`, { method: 'PUT', body: { name } }),
 
   // --- AI assistant ---
-  improveGoal: (draft: { goal_title?: string; description?: string }) =>
+  improveGoal: (draft: {
+    goal_title?: string
+    description?: string
+    thrust_area?: string
+    uom_type?: string
+    measurement_type?: string
+    target_value?: number
+  }) =>
     request('/ai/improve-goal', { method: 'POST', body: draft }),
 }

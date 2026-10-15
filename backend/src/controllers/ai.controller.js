@@ -28,19 +28,29 @@ Rules:
 - Do not invent company names, people or numbers the employee did not imply beyond a sensible target.`;
 
 const pick = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
-
-// Never trust model output blindly: coerce every field into something the form accepts
-const sanitize = (raw) => {
-  const target = Number(raw.target_value);
-  return {
-    goal_title: String(raw.goal_title || '').trim().slice(0, 80),
-    description: String(raw.description || '').trim().slice(0, 500),
-    thrust_area: pick(raw.thrust_area, THRUST_AREAS, 'Operational'),
-    uom_type: pick(raw.uom_type, UOM_TYPES, 'Number'),
-    measurement_type: pick(raw.measurement_type, MEASUREMENT_TYPES, 'Target Based'),
-    target_value: Number.isFinite(target) && target > 0 ? Math.round(target * 100) / 100 : 1,
-  };
+const positive = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 };
+
+// What the employee already chose in the form. These always win over the AI.
+const readChoices = (body) => ({
+  thrust_area: THRUST_AREAS.includes(body.thrust_area) ? body.thrust_area : null,
+  uom_type: UOM_TYPES.includes(body.uom_type) ? body.uom_type : null,
+  measurement_type: MEASUREMENT_TYPES.includes(body.measurement_type) ? body.measurement_type : null,
+  target_value: positive(body.target_value),
+});
+
+// Never trust model output blindly: keep the employee's choices, and coerce
+// everything else into something the form accepts
+const sanitize = (raw, choices) => ({
+  goal_title: String(raw.goal_title || '').trim().slice(0, 80),
+  description: String(raw.description || '').trim().slice(0, 500),
+  thrust_area: choices.thrust_area || pick(raw.thrust_area, THRUST_AREAS, 'Operational'),
+  uom_type: choices.uom_type || pick(raw.uom_type, UOM_TYPES, 'Number'),
+  measurement_type: choices.measurement_type || pick(raw.measurement_type, MEASUREMENT_TYPES, 'Target Based'),
+  target_value: choices.target_value || positive(raw.target_value) || 1,
+});
 
 export const improveGoal = async (req, res) => {
   const apiKey = process.env.GROQ_API_KEY;
@@ -61,6 +71,13 @@ export const improveGoal = async (req, res) => {
     return res.status(400).json({ error: 'Please keep the goal idea under 600 characters.' });
   }
 
+  // Tell the AI what's already decided so the title and description match it
+  const choices = readChoices(req.body);
+  const fixed = Object.entries(choices).filter(([, v]) => v !== null);
+  const userMessage = fixed.length
+    ? `My goal idea: ${idea}\nAlready decided (use exactly these values): ${fixed.map(([k, v]) => `${k} = ${v}`).join(', ')}`
+    : `My goal idea: ${idea}`;
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
@@ -74,7 +91,7 @@ export const improveGoal = async (req, res) => {
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: `My goal idea: ${idea}` },
+          { role: 'user', content: userMessage },
         ],
       }),
       signal: controller.signal,
@@ -93,7 +110,7 @@ export const improveGoal = async (req, res) => {
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
-    const suggestion = sanitize(JSON.parse(content));
+    const suggestion = sanitize(JSON.parse(content), choices);
 
     if (!suggestion.goal_title || !suggestion.description) {
       return res.status(502).json({ error: 'The AI gave an incomplete answer. Please try again.' });

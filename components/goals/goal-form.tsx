@@ -105,7 +105,15 @@ export default function GoalForm({ initialData, onSuccess, onCancel, usedPeriods
 
     setImprovingIndex(index)
     try {
-      const { suggestion } = await api.improveGoal({ goal_title: goal.goal_title, description: goal.description })
+      // Send what's already chosen too — the AI keeps those and only fills in the rest
+      const { suggestion } = await api.improveGoal({
+        goal_title: goal.goal_title,
+        description: goal.description,
+        thrust_area: goal.thrust_area,
+        uom_type: goal.uom_type,
+        measurement_type: goal.measurement_type,
+        target_value: goal.target_value,
+      })
       const fields = ['goal_title', 'description', 'thrust_area', 'uom_type', 'measurement_type', 'target_value'] as const
       for (const field of fields) {
         setValue(`goals.${index}.${field}`, suggestion[field], { shouldValidate: true, shouldDirty: true })

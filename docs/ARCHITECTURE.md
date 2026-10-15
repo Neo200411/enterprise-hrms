@@ -65,6 +65,7 @@ Rules the **server** enforces (not just the form):
 Each goal in the form has an **✨ Improve with AI** button. It sends what the employee typed to `POST /api/ai/improve-goal`; the backend asks **Groq** (GPT-OSS 120B model, OpenAI-compatible API) to rewrite it as one clear, measurable goal and to reply in **JSON mode** with exactly the form's fields.
 
 - The prompt tells the model that progress is scored as actual ÷ target, so it turns "reduce X" goals into "higher is better" goals.
+- Anything the employee **already chose** (thrust area, unit, measurement type, target) is sent as fixed and always kept — the AI only fills empty fields and rewrites the title and description to match.
 - The backend **never trusts the answer blindly**: values outside the form's options are replaced, titles are trimmed, and targets must be positive.
 - The API key lives only in `backend/.env`; the browser never sees it. Each person can use it 20 times per 15 minutes.
 - It only *suggests* — weightage is untouched, the employee edits freely, and all normal submission rules still apply. If no key is set or Groq fails, the button shows a message and nothing else changes.
