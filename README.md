@@ -83,6 +83,20 @@ cd backend && npm run dev   # API on http://localhost:5001
 npm run dev                 # App on http://localhost:3000
 ```
 
+## Deploy to Render
+
+`render.yaml` describes everything, so Render can create it in one go:
+
+1. Render dashboard → **New → Blueprint** → connect this GitHub repo (branch `express-migration`).
+2. Render asks for three values. Fill them using the names from `render.yaml`:
+   - `CORS_ORIGIN` = `https://primehr-web.onrender.com`
+   - `NEXT_PUBLIC_API_URL` = `https://primehr-api.onrender.com/api`
+   - `GROQ_API_KEY` = your Groq key (optional)
+3. Click **Apply**. Render creates the database, the API and the website. On start, the API runs `npm run db:setup`, which creates the tables and the demo accounts.
+4. If Render gave a service a different URL (it adds a suffix when the name is taken), update `CORS_ORIGIN` / `NEXT_PUBLIC_API_URL` to the real URLs and redeploy the website — `NEXT_PUBLIC_API_URL` is baked in at build time.
+
+Free plan notes: services sleep after ~15 minutes idle, so the first visit can take up to a minute; the free database has an expiry date — check Render's current limits.
+
 ## Demo Accounts
 
 Password for all: `Test@123`
